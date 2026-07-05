@@ -1,0 +1,7 @@
+{
+  "name": "Outdoor lights coordinator",
+  "homeassistant": ">=2026.6.0",
+  "content_in_root": false,
+  "zip_release": false,
+  "render_readme": true
+}

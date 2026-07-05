@@ -1,0 +1,12 @@
+{
+  "domain": "ulkovalot",
+  "name": "Outdoor lights coordinator",
+  "version": "0.0.1",
+  "codeowners": ["@timmikk"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/timmikk/ha-ulkovalot",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/timmikk/ha-ulkovalot/issues",
+  "requirements": []
+}
