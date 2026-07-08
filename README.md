@@ -13,6 +13,9 @@ HACS-installable. See `info.md` for install/rollback instructions.
 - Component code lives in `custom_components/ulkovalot/`.
 - Tests: `pytest` (uses `pytest-homeassistant-custom-component`).
 - CI: `.forgejo/workflows/ci.yml` runs `hassfest` + `hacs/action` + pytest.
+- Code quality: SonarQube analysis runs on push to `main`; dashboard at
+  <http://192.168.16.16:9000/dashboard?id=ha-ulkovalot>. Quality gate is
+  enforced by CI.
 - Release: tag `vX.Y.Z` on Forgejo → mirror syncs → GitHub Actions
   (`.github/workflows/release.yml`) creates a Release object → HACS
   offers the version in the UI.
