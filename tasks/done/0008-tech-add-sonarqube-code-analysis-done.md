@@ -1,12 +1,12 @@
 # Task: add SonarQube code analysis to CI
 
-**Status:** pending
+**Status:** done
 **Issue:** #8
 **Type:** tech
 **Complexity:** small
 **Version bump:** patch
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-07-08
 
 ## Context
 
@@ -171,3 +171,10 @@ workflow lands:
   the dashboard shows a non-empty coverage measurement
 - [ ] `curl` against `/api/qualitygates/project_status?projectKey=ha-ulkovalot`
   returns a real status (not "component not found")
+
+## Actual commits
+
+- d7098ba chore(sonar): add project descriptor for ha-ulkovalot
+- 21c22ab chore(tests): add pytest-cov for coverage.xml output
+- e188078 ci: emit coverage.xml and add sonar job on push-to-main
+- c86b8f9 docs(readme): note sonarqube quality gate
