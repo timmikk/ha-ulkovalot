@@ -1,12 +1,12 @@
 # Task: ulkovalot config flow surface (Stage 1)
 
-**Status:** pending
+**Status:** done
 **Issue:** #1
 **Type:** feature
 **Complexity:** medium
 **Version bump:** minor
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-07-08
 
 ## Context
 
@@ -88,3 +88,9 @@ Target: ≥ 90 % coverage of `config_flow.py`. See the overview's
 
 Version: stays at `0.0.1`. No release tag from this stage alone; it's
 released together with Stage 2 as `0.1.0`.
+
+## Actual commits
+
+- 1262c1f feat(const): add config keys, defaults, and ranges
+- 875b769 feat(config_flow): implement user, reconfigure, and options flows
+- 7e7b2ce test(config_flow): cover happy path, abort, options, reconfigure, validation
