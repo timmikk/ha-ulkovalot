@@ -1,12 +1,12 @@
 # Task: ulkovalot pure state engine (Stage 2)
 
-**Status:** pending
+**Status:** done
 **Issue:** #2
 **Type:** tech
 **Complexity:** medium
 **Version bump:** patch
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-07-14
 
 ## Context
 
@@ -106,3 +106,9 @@ release surface.
 - Anything that touches `hass` — Stage 3.
 - Override state machine (timer, service registration) — Stage 2b.
 - Parity replay against blueprint — Stage 4.
+
+## Actual commits
+
+- e168f7e feat(logic): add pure state engine module
+- ca7655e test(logic): cover state engine at 100% line and branch
+- cd52169 chore(release): bump manifest to 0.1.0
