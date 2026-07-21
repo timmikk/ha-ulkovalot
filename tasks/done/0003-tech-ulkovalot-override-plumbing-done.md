@@ -1,12 +1,12 @@
 # Task: ulkovalot manual override plumbing (Stage 2b)
 
-**Status:** pending
+**Status:** done
 **Issue:** #3
 **Type:** tech
 **Complexity:** small
 **Version bump:** patch
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-07-21
 
 ## Context
 
@@ -107,3 +107,9 @@ overview for shared fixtures + clock control (`advance`,
 - Actual `scene.turn_on` dispatch — Stage 3 (Stage 2b tests use a
   stubbed apply function).
 - Blueprint parity — Stage 4.
+
+## Actual commits
+
+- 8774f84 feat(coordinator): add override state machine
+- c0b09f3 feat(services): register override and cancel_override services
+- 9bca7b8 test(override): cover state machine, services, and trigger entity
