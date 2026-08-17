@@ -30,7 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ulkovalot from a config entry."""
     store = hass.data.setdefault(DOMAIN, {})
     coordinator = UlkovalotCoordinator(hass, entry)
-    coordinator.wire_trigger()
+    await coordinator.async_start()
     store[entry.entry_id] = coordinator
     _register_services(hass)
     return True
