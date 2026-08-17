@@ -1,12 +1,12 @@
 # Task: ulkovalot coordinator runtime wiring (Stage 3)
 
-**Status:** pending
+**Status:** done
 **Issue:** #4
 **Type:** feature
 **Complexity:** large
 **Version bump:** minor
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-08-17
 
 ## Context
 
@@ -116,3 +116,8 @@ Target: **≥ 90 % coverage of `coordinator.py`**.
 
 - Blueprint parity replay — Stage 4.
 - Live cutover — Stage 5.
+
+## Actual commits
+
+- 9febcc7 feat(coordinator): wire ha runtime subscriptions and scene dispatch
+- 7f21b66 test(coordinator): cover runtime scene dispatch
