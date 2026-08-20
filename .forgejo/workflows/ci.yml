@@ -7,13 +7,39 @@ on:
 
 jobs:
   hassfest:
-    # image-builder is the only runner with the docker socket mounted;
-    # home-assistant/actions/hassfest runs hassfest inside a docker container.
-    # infra #98/#182 pattern; infra #220 for the DEFAULT_ACTIONS_URL context.
-    runs-on: image-builder
+    # home-assistant/actions/hassfest is a Dockerfile action: it mounts
+    # $GITHUB_WORKSPACE into the container. On Forgejo Actions the docker CLI
+    # inside the job container talks to the *host* daemon (socket mount from
+    # image-builder), so the mount references a path that doesn't exist on
+    # the host and the container reports "No integrations found". Run
+    # hassfest as a Python module against a shallow HA core clone instead —
+    # no docker, no image-builder. Infra task #222.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: home-assistant/actions/hassfest@master
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            /tmp/ha-core
+          key: hassfest-${{ runner.os }}-py3.13-v1
+      - name: Fetch home-assistant/core and install
+        run: |
+          if [ ! -d /tmp/ha-core/.git ]; then
+            git clone --depth 1 https://github.com/home-assistant/core /tmp/ha-core
+          fi
+          python -m pip install --upgrade pip
+          python -m pip install homeassistant
+      - name: Run hassfest
+        run: |
+          cd /tmp/ha-core
+          python -m script.hassfest \
+            --integration-path "$GITHUB_WORKSPACE/custom_components/ulkovalot" \
+            --action validate \
+            --requirements
 
   hacs:
     runs-on: ubuntu-latest
