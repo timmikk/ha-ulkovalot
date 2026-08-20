@@ -7,7 +7,10 @@ on:
 
 jobs:
   hassfest:
-    runs-on: ubuntu-latest
+    # image-builder is the only runner with the docker socket mounted;
+    # home-assistant/actions/hassfest runs hassfest inside a docker container.
+    # infra #98/#182 pattern; infra #220 for the DEFAULT_ACTIONS_URL context.
+    runs-on: image-builder
     steps:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
@@ -17,6 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: hacs/action@main
+        env:
+          # HACS action calls github.com to verify the public mirror
+          # (github.com/timmikk/ha-ulkovalot). Forgejo's built-in
+          # secrets.GITHUB_TOKEN is Forgejo-scoped and returns 401 for
+          # github.com API calls, so pass a real PAT via a repo secret.
+          # HACS_GITHUB_TOKEN mirrors infra vault_github_mirror_token
+          # (contents: read on all timmikk/ha-* mirrors). See infra #220.
+          GITHUB_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
         with:
           category: integration
           ignore: brands
