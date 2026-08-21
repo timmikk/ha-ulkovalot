@@ -27,9 +27,9 @@ jobs:
       - name: Install homeassistant + fetch matching core
         run: |
           python -m pip install --upgrade pip
-          # tqdm is a script-only dep of hassfest that isn't pulled in by
-          # the homeassistant runtime package.
-          python -m pip install homeassistant tqdm
+          # tqdm + ruff are script-only deps of hassfest that aren't
+          # pulled in by the homeassistant runtime package.
+          python -m pip install homeassistant tqdm ruff
           HA_VERSION=$(python -c "from importlib.metadata import version; print(version('homeassistant'))")
           echo "HA_VERSION=$HA_VERSION" >>"$GITHUB_ENV"
           rm -rf /tmp/ha-core
