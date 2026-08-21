@@ -29,6 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           # tqdm + ruff are script-only deps of hassfest that aren't
           # pulled in by the homeassistant runtime package.
+          # (--requirements is dropped from the invocation below because
+          # its transitive dependency chain — pipdeptree, pip-tools, etc.
+          # — is not worth reconstructing for a manifest with no external
+          # requirements.)
           python -m pip install homeassistant tqdm ruff
           HA_VERSION=$(python -c "from importlib.metadata import version; print(version('homeassistant'))")
           echo "HA_VERSION=$HA_VERSION" >>"$GITHUB_ENV"
@@ -44,8 +48,7 @@ jobs:
           cd /tmp/ha-core
           python -m script.hassfest \
             --integration-path "$GITHUB_WORKSPACE/custom_components/ulkovalot" \
-            --action validate \
-            --requirements
+            --action validate
 
   hacs:
     runs-on: ubuntu-latest
