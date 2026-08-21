@@ -22,17 +22,21 @@ jobs:
           python-version: "3.13"
       - uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/pip
-            /tmp/ha-core
-          key: hassfest-${{ runner.os }}-py3.13-v1
-      - name: Fetch home-assistant/core and install
+          path: ~/.cache/pip
+          key: hassfest-${{ runner.os }}-py3.13-v2
+      - name: Install homeassistant + fetch matching core
         run: |
-          if [ ! -d /tmp/ha-core/.git ]; then
-            git clone --depth 1 https://github.com/home-assistant/core /tmp/ha-core
-          fi
           python -m pip install --upgrade pip
           python -m pip install homeassistant
+          HA_VERSION=$(python -c "import homeassistant; print(homeassistant.const.__version__)")
+          echo "HA_VERSION=$HA_VERSION" >>"$GITHUB_ENV"
+          rm -rf /tmp/ha-core
+          # Clone core at the tag matching the pip-installed package so
+          # script.hassfest lines up with the runtime it validates against.
+          # master can outpace the released package and introduce Python
+          # incompatibilities (e.g. self-referencing class annotations).
+          git clone --depth 1 --branch "$HA_VERSION" \
+            https://github.com/home-assistant/core /tmp/ha-core
       - name: Run hassfest
         run: |
           cd /tmp/ha-core
