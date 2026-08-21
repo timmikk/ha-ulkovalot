@@ -1,0 +1,22 @@
+override:
+  name: Override
+  description: Force a specific scene for a bounded duration, overriding the automatic schedule.
+  fields:
+    scene:
+      name: Scene
+      description: Entity ID of the scene to activate.
+      selector:
+        entity:
+          domain: scene
+    duration:
+      name: Duration
+      description: How long to hold the override, in seconds.
+      selector:
+        number:
+          min: 1
+          max: 86400
+          unit_of_measurement: seconds
+
+cancel_override:
+  name: Cancel override
+  description: Clear an active override and return to the automatic schedule.
