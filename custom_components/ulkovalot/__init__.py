@@ -10,6 +10,8 @@ from homeassistant.helpers import config_validation as cv
 from .const import DOMAIN
 from .coordinator import UlkovalotCoordinator
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 SERVICE_OVERRIDE = "override"
 SERVICE_CANCEL_OVERRIDE = "cancel_override"
 
