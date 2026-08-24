@@ -54,6 +54,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Diagnose token
+        env:
+          GITHUB_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
+          PAT_PROBE: ${{ secrets.HACS_GITHUB_TOKEN }}
+        run: |
+          probe() {
+            local name="$1" value="$2"
+            printf '%s: len=%s sha256=%s first4=%s last4=%s\n' \
+              "$name" "${#value}" \
+              "$(printf '%s' "$value" | sha256sum | cut -d' ' -f1)" \
+              "${value:0:4}" "${value: -4}"
+            local code
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              -H "Authorization: token $value" https://api.github.com/user)
+            printf '%s: api.github.com/user -> HTTP %s\n' "$name" "$code"
+          }
+          probe GITHUB_TOKEN "$GITHUB_TOKEN"
+          probe PAT_PROBE "$PAT_PROBE"
       - uses: hacs/action@main
         env:
           # HACS action calls github.com to verify the public mirror
