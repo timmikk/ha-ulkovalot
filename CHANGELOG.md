@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-08-25
+
+### Fixed
+
+- `hacs.json`: declare the minimum Home Assistant version as a bare
+  version string (`2025.1.0`) instead of a constraint expression
+  (`>=2026.6.0`). HACS feeds this value straight to
+  `AwesomeVersion`, which cannot parse a comparison operator — the
+  download aborted with `AwesomeVersionCompareException: Can't compare
+  <CalVer ...> and <unknown >=2026.6.0>` before the integration could
+  install. The `>=` is implied by HACS.
+- Lower that minimum from `2026.6.0` to `2025.1.0`. The former was the
+  scaffold's default constant, not a researched floor; the newest HA
+  API the component uses is `_get_reconfigure_entry()` (2024.11).
+
 ## [0.9.0] - 2026-08-25
 
 Pre-cutover release candidate for the live migration (Stage 5) off the
