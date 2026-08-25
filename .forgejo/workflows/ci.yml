@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/hassfest-venv
-          key: hassfest-venv-${{ runner.os }}-py3.14-${{ env.HA_VERSION }}-v1
+          key: hassfest-venv-${{ runner.os }}-py3.14-${{ env.HA_VERSION }}-v2
       - name: Cache ha-core clone
         id: core-cache
         uses: actions/cache@v4
@@ -127,13 +127,21 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: coverage-xml
+      - name: Cache sonar-scanner
+        id: sonar-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/sonar-scanner-6.2.1.4610-linux-x64
+          key: sonar-scanner-6.2.1.4610-${{ runner.os }}
       - name: Install sonar-scanner
+        if: steps.sonar-cache.outputs.cache-hit != 'true'
         run: |
           apt-get update -qq && apt-get install -y -qq unzip > /dev/null 2>&1
           curl -sL "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-6.2.1.4610-linux-x64.zip" -o /tmp/sonar.zip
           unzip -q /tmp/sonar.zip -d /opt
-          ln -s /opt/sonar-scanner-6.2.1.4610-linux-x64/bin/sonar-scanner /usr/local/bin/sonar-scanner
           rm /tmp/sonar.zip
+      - name: Link sonar-scanner
+        run: ln -sf /opt/sonar-scanner-6.2.1.4610-linux-x64/bin/sonar-scanner /usr/local/bin/sonar-scanner
       - name: SonarQube analysis
         env:
           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
