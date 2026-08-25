@@ -17,6 +17,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Python 3.14 toolcache
+        # setup-python's "local cache" check is /opt/hostedtoolcache/Python,
+        # but this runner starts a fresh container per job, so that check
+        # always misses and setup-python re-downloads the interpreter from
+        # GitHub every run. Pre-seed the directory it checks so it doesn't.
+        uses: actions/cache@v4
+        with:
+          path: /opt/hostedtoolcache/Python/3.14*
+          key: python-3.14-${{ runner.os }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
@@ -98,6 +107,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Python 3.12 toolcache
+        uses: actions/cache@v4
+        with:
+          path: /opt/hostedtoolcache/Python/3.12*
+          key: python-3.12-${{ runner.os }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
