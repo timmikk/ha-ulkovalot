@@ -42,16 +42,16 @@ jobs:
       - name: Install homeassistant
         if: steps.venv-cache.outputs.cache-hit != 'true'
         run: |
-          python -m venv ~/hassfest-venv
+          pip install uv
+          uv venv ~/hassfest-venv
           source ~/hassfest-venv/bin/activate
-          python -m pip install --upgrade pip
           # tqdm + ruff are script-only deps of hassfest that aren't
           # pulled in by the homeassistant runtime package.
           # (--requirements is dropped from the invocation below because
           # its transitive dependency chain — pipdeptree, pip-tools, etc.
           # — is not worth reconstructing for a manifest with no external
           # requirements.)
-          python -m pip install "homeassistant==$HA_VERSION" tqdm ruff
+          uv pip install "homeassistant==$HA_VERSION" tqdm ruff
       - name: Fetch matching core
         if: steps.core-cache.outputs.cache-hit != 'true'
         run: |
