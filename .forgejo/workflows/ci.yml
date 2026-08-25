@@ -54,37 +54,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Diagnose token
-        env:
-          GITHUB_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
-          PAT_PROBE: ${{ secrets.HACS_GITHUB_TOKEN }}
-          CTX_REPOSITORY: ${{ github.repository }}
-        run: |
-          echo "github.repository context: $CTX_REPOSITORY"
-          echo "GITHUB_REPOSITORY env: $GITHUB_REPOSITORY"
-          probe() {
-            local name="$1" value="$2"
-            printf '%s: len=%s sha256=%s first4=%s last4=%s\n' \
-              "$name" "${#value}" \
-              "$(printf '%s' "$value" | sha256sum | cut -d' ' -f1)" \
-              "${value:0:4}" "${value: -4}"
-            local code
-            code=$(curl -sS -o /dev/null -w '%{http_code}' \
-              -H "Authorization: token $value" https://api.github.com/user)
-            printf '%s: api.github.com/user -> HTTP %s\n' "$name" "$code"
-          }
-          probe GITHUB_TOKEN "$GITHUB_TOKEN"
-          probe PAT_PROBE "$PAT_PROBE"
       - uses: hacs/action@main
-        env:
-          # HACS action calls github.com to verify the public mirror
-          # (github.com/timmikk/ha-ulkovalot). Forgejo's built-in
-          # secrets.GITHUB_TOKEN is Forgejo-scoped and returns 401 for
-          # github.com API calls, so pass a real PAT via a repo secret.
-          # HACS_GITHUB_TOKEN mirrors infra vault_github_mirror_token
-          # (contents: read on all timmikk/ha-* mirrors). See infra #220.
-          GITHUB_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
         with:
+          # hacs/action reads its token from the `github_token` *input*
+          # (container env INPUT_GITHUB_TOKEN), not a step-level
+          # GITHUB_TOKEN env var — that env var is never read by the
+          # container at all. Unset, it defaults to `${{ github.token }}`,
+          # Forgejo's own instance-scoped ephemeral token, which
+          # api.github.com rejects with 401 (confirmed via a diagnostic
+          # probe: the same PAT passed as a plain env var authenticates
+          # fine against api.github.com/user, but the action itself still
+          # 401s until wired through this input). See infra #223.
+          #
+          # `repository` also needs pinning: `github.repository` resolves
+          # to the *Forgejo* repo (timo/ha-ulkovalot), not the GitHub
+          # mirror HACS actually needs to validate (timmikk/ha-ulkovalot).
+          github_token: ${{ secrets.HACS_GITHUB_TOKEN }}
+          repository: timmikk/ha-ulkovalot
           category: integration
           ignore: brands
 
