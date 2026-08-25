@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - name: Resolve latest homeassistant version
         # Queried up front (before installing/cloning anything) so both
         # heavy steps below can be cached by version and skipped entirely
@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/hassfest-venv
-          key: hassfest-venv-${{ runner.os }}-py3.13-${{ env.HA_VERSION }}-v1
+          key: hassfest-venv-${{ runner.os }}-py3.14-${{ env.HA_VERSION }}-v1
       - name: Cache ha-core clone
         id: core-cache
         uses: actions/cache@v4
