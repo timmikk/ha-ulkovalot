@@ -20,12 +20,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: hassfest-${{ runner.os }}-py3.13-v2
-      - name: Install homeassistant + fetch matching core
+      - name: Resolve latest homeassistant version
+        # Queried up front (before installing/cloning anything) so both
+        # heavy steps below can be cached by version and skipped entirely
+        # on cache hit, instead of only caching pip's download cache.
         run: |
+          HA_VERSION=$(curl -sS https://pypi.org/pypi/homeassistant/json | python -c "import json,sys; print(json.load(sys.stdin)['info']['version'])")
+          echo "HA_VERSION=$HA_VERSION" >>"$GITHUB_ENV"
+      - name: Cache hassfest venv
+        id: venv-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/hassfest-venv
+          key: hassfest-venv-${{ runner.os }}-py3.13-${{ env.HA_VERSION }}-v1
+      - name: Cache ha-core clone
+        id: core-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ha-core
+          key: hassfest-core-${{ env.HA_VERSION }}-v1
+      - name: Install homeassistant
+        if: steps.venv-cache.outputs.cache-hit != 'true'
+        run: |
+          python -m venv ~/hassfest-venv
+          source ~/hassfest-venv/bin/activate
           python -m pip install --upgrade pip
           # tqdm + ruff are script-only deps of hassfest that aren't
           # pulled in by the homeassistant runtime package.
@@ -33,9 +51,10 @@ jobs:
           # its transitive dependency chain — pipdeptree, pip-tools, etc.
           # — is not worth reconstructing for a manifest with no external
           # requirements.)
-          python -m pip install homeassistant tqdm ruff
-          HA_VERSION=$(python -c "from importlib.metadata import version; print(version('homeassistant'))")
-          echo "HA_VERSION=$HA_VERSION" >>"$GITHUB_ENV"
+          python -m pip install "homeassistant==$HA_VERSION" tqdm ruff
+      - name: Fetch matching core
+        if: steps.core-cache.outputs.cache-hit != 'true'
+        run: |
           rm -rf /tmp/ha-core
           # Clone core at the tag matching the pip-installed package so
           # script.hassfest lines up with the runtime it validates against.
@@ -45,6 +64,7 @@ jobs:
             https://github.com/home-assistant/core /tmp/ha-core
       - name: Run hassfest
         run: |
+          source ~/hassfest-venv/bin/activate
           cd /tmp/ha-core
           python -m script.hassfest \
             --integration-path "$GITHUB_WORKSPACE/custom_components/ulkovalot" \
