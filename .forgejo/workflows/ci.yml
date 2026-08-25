@@ -58,7 +58,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
           PAT_PROBE: ${{ secrets.HACS_GITHUB_TOKEN }}
+          CTX_REPOSITORY: ${{ github.repository }}
         run: |
+          echo "github.repository context: $CTX_REPOSITORY"
+          echo "GITHUB_REPOSITORY env: $GITHUB_REPOSITORY"
           probe() {
             local name="$1" value="$2"
             printf '%s: len=%s sha256=%s first4=%s last4=%s\n' \
