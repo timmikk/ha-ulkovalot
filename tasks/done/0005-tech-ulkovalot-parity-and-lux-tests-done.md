@@ -1,12 +1,12 @@
 # Task: ulkovalot parity harness and lux tests (Stage 4)
 
-**Status:** pending
+**Status:** done
 **Issue:** #5
 **Type:** tech
 **Complexity:** medium
 **Version bump:** patch
 **Created:** 2026-07-08
-**Completed:** —
+**Completed:** 2026-08-25
 
 ## Context
 
@@ -98,3 +98,7 @@ divergences.
 
 - Live cutover — Stage 5.
 - Docs update — Stage 6.
+
+## Actual commits
+
+- 2d33ff1 test(parity): add blueprint parity trace and lux focus tests
