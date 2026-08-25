@@ -16,9 +16,12 @@ HACS-installable. See `info.md` for install/rollback instructions.
 - Code quality: SonarQube analysis runs on push to `main`; dashboard at
   <http://192.168.16.16:9000/dashboard?id=ha-ulkovalot>. Quality gate is
   enforced by CI.
-- Release: tag `vX.Y.Z` on Forgejo → mirror syncs → GitHub Actions
-  (`.github/workflows/release.yml`) creates a Release object → HACS
-  offers the version in the UI.
+- Release: tag `vX.Y.Z` on Forgejo → `.forgejo/workflows/release.yml`
+  waits for the mirror to sync the tag, then creates a GitHub Release
+  object via the API → HACS offers the version in the UI.
+  HACS reads GitHub's *Releases* API, not git tags: with no Release
+  object it tracks the default branch and shows commit hashes instead
+  of versions.
 
 ## Secrets policy
 

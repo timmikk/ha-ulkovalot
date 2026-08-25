@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Create a GitHub Release object on tag push
+  (`.forgejo/workflows/release.yml`). HACS decides between showing
+  versions and showing commit hashes by querying GitHub's *Releases*
+  API, not git tags — with zero releases it tracked the default branch
+  and offered commit SHAs. The mirror synced the tags fine; nothing
+  ever created the Release objects, because the original
+  `.github/workflows/release.yml` was dropped in eec9d81 on the
+  incorrect premise that a Release is only cosmetic. Creating it from
+  the Forgejo side sidesteps that commit's actual blocker (the mirror
+  PAT has no `workflow` scope, so the file could not be pushed to
+  GitHub).
+
 ## [0.9.1] - 2026-08-25
 
 ### Fixed

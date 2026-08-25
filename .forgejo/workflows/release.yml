@@ -1,0 +1,91 @@
+name: Release
+
+# HACS decides whether to show versions or commit hashes by querying the
+# GitHub *Releases* API — not git tags. Tags alone (which the mirror syncs
+# fine) leave the repo with zero releases, so HACS falls back to tracking
+# the default branch and displays commit SHAs.
+#
+# The original .github/workflows/release.yml was dropped (eec9d81) because
+# the mirror PAT lacks the `workflow` scope, so the file itself couldn't be
+# pushed to GitHub. Creating the Release from *here* avoids that entirely:
+# it's a plain API call from the Forgejo runner, no workflow file on the
+# mirror. Refs infra #21.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  github-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for mirror to sync the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # The Forgejo -> GitHub mirror is asynchronous; creating a release
+          # for a tag GitHub hasn't seen yet 422s.
+          for i in $(seq 1 30); do
+            if curl -sSf -o /dev/null \
+              "https://api.github.com/repos/timmikk/ha-ulkovalot/git/ref/tags/$TAG"; then
+              echo "tag $TAG present on mirror"
+              exit 0
+            fi
+            echo "waiting for $TAG on mirror ($i/30)..."
+            sleep 10
+          done
+          echo "tag $TAG never appeared on the GitHub mirror" >&2
+          exit 1
+
+      - name: Extract changelog section for this tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          # Pull just this version's section out of CHANGELOG.md.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { inside = 1; next }
+            inside && /^## \[/       { exit }
+            inside                   { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            printf 'Release %s\n' "$TAG" > /tmp/notes.md
+          fi
+          cat /tmp/notes.md
+
+      - name: Create GitHub Release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.HACS_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "HACS_GITHUB_TOKEN is not set" >&2
+            exit 1
+          fi
+          jq -n --arg tag "$TAG" --rawfile body /tmp/notes.md \
+            '{tag_name:$tag, name:$tag, body:$body, draft:false, prerelease:false}' \
+            > /tmp/release.json
+
+          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/release.json \
+            "https://api.github.com/repos/timmikk/ha-ulkovalot/releases")
+
+          if [ "$code" = "201" ]; then
+            echo "created release $TAG"
+          elif [ "$code" = "422" ]; then
+            # Already exists — re-running a tag build should not fail.
+            echo "release $TAG already exists, nothing to do"
+          else
+            echo "GitHub API returned $code" >&2
+            cat /tmp/resp.json >&2
+            exit 1
+          fi
