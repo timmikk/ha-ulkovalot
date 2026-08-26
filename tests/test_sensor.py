@@ -167,3 +167,55 @@ def test_current_scene_sensor_is_none_string_when_unset(hass: HomeAssistant) -> 
     sensor = CurrentSceneSensor(coordinator, entry)
 
     assert sensor.native_value == "none"
+
+
+# --- threshold attributes on the existing sensors --------------------------
+
+
+def test_illuminance_sensor_exposes_lux_thresholds(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = IlluminanceSensor(coordinator, entry)
+
+    assert sensor.extra_state_attributes == {
+        "lux_on_below": 30.0,
+        "lux_off_above": 100.0,
+    }
+
+
+def test_sun_elevation_sensor_exposes_elevation_thresholds(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = SunElevationSensor(coordinator, entry)
+
+    assert sensor.extra_state_attributes == {
+        "sun_elev_dark_floor": -3.0,
+        "sun_elev_bright_ceiling": 6.0,
+    }
+
+
+def test_phase_sensor_exposes_night_window_bounds(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = PhaseSensor(coordinator, entry)
+
+    assert sensor.extra_state_attributes == {
+        "night_start": "23:00:00",
+        "night_end": "07:00:00",
+    }
+
+
+def test_current_scene_sensor_exposes_scene_key_and_transition(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(scene_key="scene_motion", transition=1.0)
+    sensor = CurrentSceneSensor(coordinator, entry)
+
+    assert sensor.extra_state_attributes == {
+        "scene_key": "scene_motion",
+        "transition": 1.0,
+    }

@@ -62,6 +62,10 @@ class MotionBinarySensor(_DiagnosticBinarySensor):
     def is_on(self) -> bool:
         return self.coordinator.diagnostics.motion
 
+    @property
+    def extra_state_attributes(self) -> dict[str, float]:
+        return {"no_motion_wait": self.coordinator.config.no_motion_wait}
+
 
 class DarkBinarySensor(_DiagnosticBinarySensor):
     """True when ``is_dark()`` says dark (drives phase != DAY)."""

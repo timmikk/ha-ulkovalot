@@ -157,3 +157,11 @@ def test_override_active_binary_sensor_attributes_when_inactive(
 
     assert sensor.is_on is False
     assert sensor.extra_state_attributes == {"scene": None, "until": None}
+
+
+def test_motion_binary_sensor_exposes_no_motion_wait(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = MotionBinarySensor(coordinator, entry)
+
+    assert sensor.extra_state_attributes == {"no_motion_wait": 120.0}
