@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-08-26
+
+### Fixed
+
+- Sun elevation crossing detection previously gated the coordinator's
+  scene-decision cycle, so the `sun_elevation` diagnostic (and the
+  `dark`/`phase` decision it's derived from) went stale for hours
+  whenever the sun moved without crossing a dark-floor or
+  bright-ceiling threshold. Re-evaluate on every sun reading instead,
+  with a same-scene dispatch dedup so `scene.turn_on` isn't spammed on
+  every ~minute sun tick.
+
 ## [0.10.0] - 2026-08-26
 
 ### Added
