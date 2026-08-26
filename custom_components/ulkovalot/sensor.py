@@ -26,9 +26,11 @@ def _options(enum: type[Enum]) -> list[str]:
 
     Hand-typing these lets them drift from the values the coordinator
     actually reports, and HA silently drops a state that isn't in the
-    list — so always derive.
+    list — so always derive. Reads ``__members__`` rather than iterating
+    the class directly, which static analysis doesn't recognise as
+    iterable through ``EnumMeta``.
     """
-    return [member.value for member in enum]
+    return [member.value for member in enum.__members__.values()]
 
 
 _PHASE_OPTIONS = _options(Phase)
