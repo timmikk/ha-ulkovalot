@@ -27,7 +27,7 @@ _OVERRIDE_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(_hass: HomeAssistant, _config: dict) -> bool:
     """Set up the ulkovalot integration from YAML (unused — config flow only)."""
     return True
 

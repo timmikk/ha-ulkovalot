@@ -255,7 +255,7 @@ class UlkovalotCoordinator:
         return _remove
 
     def _notify_listeners(self) -> None:
-        for listener in list(self._listeners):
+        for listener in self._listeners[:]:
             listener()
 
     # -- Override state machine ---------------------------------------------

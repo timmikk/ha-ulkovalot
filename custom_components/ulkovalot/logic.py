@@ -46,24 +46,29 @@ class MotionSample:
 _INVALID_LUX_STRINGS = {"unknown", "unavailable", "none", ""}
 
 
+def _parse_lux_reading(raw: float | int | str | None) -> float | None:
+    """Coerce one raw reading to a float, or ``None`` if it isn't valid."""
+    if raw is None or isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if not isinstance(raw, str):
+        return None
+    if raw.strip().lower() in _INVALID_LUX_STRINGS:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 def aggregate_lux(readings: Iterable[float | int | str | None]) -> float | None:
     """Median of the valid readings, or ``None`` if none remain."""
-    valid: list[float] = []
-    for raw in readings:
-        if raw is None:
-            continue
-        if isinstance(raw, bool):
-            continue
-        if isinstance(raw, (int, float)):
-            valid.append(float(raw))
-            continue
-        if isinstance(raw, str):
-            if raw.strip().lower() in _INVALID_LUX_STRINGS:
-                continue
-            try:
-                valid.append(float(raw))
-            except ValueError:
-                continue
+    valid = [
+        parsed
+        for raw in readings
+        if (parsed := _parse_lux_reading(raw)) is not None
+    ]
     if not valid:
         return None
     return float(median(valid))
