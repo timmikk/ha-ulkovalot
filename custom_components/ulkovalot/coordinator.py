@@ -61,12 +61,14 @@ from .const import (
 from .logic import (
     LogicConfig,
     MotionSample,
+    Phase,
     aggregate_lux,
     derive_phase,
     is_dark,
     motion_active,
     override_active,
     pick_scene,
+    selection_reason,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -190,6 +192,24 @@ class RuntimeConfig:
         )
 
 
+@dataclass(frozen=True)
+class DiagnosticsSnapshot:
+    """Read-only snapshot of one evaluation cycle, for diagnostic entities."""
+
+    motion: bool
+    dark: bool
+    illuminance: float | None
+    sun_elevation: float | None
+    phase: Phase
+    reason: str
+    override_active: bool
+    override_scene: str | None
+    override_until: datetime | None
+    disabled: bool
+    applied_scene: str | None
+    updated_at: datetime
+
+
 class UlkovalotCoordinator:
     """Runtime coordinator: subscriptions, override state, scene dispatch."""
 
@@ -207,6 +227,36 @@ class UlkovalotCoordinator:
         self._pending_task: asyncio.Task | None = None
         self._last_sun_elev: float | None = None
         self.apply_scene: ApplyScene = _noop_apply
+        self.diagnostics = DiagnosticsSnapshot(
+            motion=False,
+            dark=False,
+            illuminance=None,
+            sun_elevation=None,
+            phase=Phase.DAY,
+            reason="day",
+            override_active=False,
+            override_scene=None,
+            override_until=None,
+            disabled=False,
+            applied_scene=None,
+            updated_at=dt_util.utcnow(),
+        )
+        self._listeners: list[Callable[[], None]] = []
+
+    # -- Diagnostics listeners ------------------------------------------------
+
+    def async_add_listener(self, update_callback: Callable[[], None]) -> Callable[[], None]:
+        """Register a callback fired after every diagnostics update."""
+        self._listeners.append(update_callback)
+
+        def _remove() -> None:
+            self._listeners.remove(update_callback)
+
+        return _remove
+
+    def _notify_listeners(self) -> None:
+        for listener in list(self._listeners):
+            listener()
 
     # -- Override state machine ---------------------------------------------
 
@@ -277,6 +327,7 @@ class UlkovalotCoordinator:
             self._pending_task.cancel()
         self._pending_task = None
         self.apply_scene = _noop_apply
+        self._listeners.clear()
 
     # -- Subscriptions ------------------------------------------------------
 
@@ -410,13 +461,11 @@ class UlkovalotCoordinator:
 
     async def _apply_scene_impl(self) -> None:
         cfg = self.config
+        disabled = False
         if cfg.disable_flag:
             state = self.hass.states.get(cfg.disable_flag)
-            if state is not None and state.state == "on":
-                _LOGGER.debug(
-                    "Disabled via %s — skipping apply", cfg.disable_flag
-                )
-                return
+            disabled = state is not None and state.state == "on"
+
         elev, rising = self._read_sun()
         lux_readings = [
             (
@@ -441,34 +490,62 @@ class UlkovalotCoordinator:
         now_utc = dt_util.utcnow()
         motion = motion_active(now_utc, motion_samples, cfg.no_motion_wait)
         override = override_active(now_utc, self.override_until)
+        reason = selection_reason(phase, motion, override, disabled)
         scene_key, transition_key = pick_scene(phase, motion, override)
         _LOGGER.debug(
-            "Apply: elev=%.1f lux=%s dark=%s phase=%s motion=%s override=%s -> %s",
+            "Apply: elev=%.1f lux=%s dark=%s phase=%s motion=%s override=%s "
+            "disabled=%s -> %s",
             elev,
             lux,
             self.last_dark,
             phase,
             motion,
             override,
+            disabled,
             scene_key,
         )
-        entity = self._resolve_scene_entity(scene_key)
-        if not entity:
-            _LOGGER.debug("No scene entity resolved for key %s", scene_key)
-            return
-        if not self.hass.services.has_service(SCENE_DOMAIN, SCENE_SERVICE_TURN_ON):
-            _LOGGER.debug("scene.turn_on not available yet — skipping dispatch")
-            return
-        transition = getattr(cfg, transition_key)
-        _LOGGER.debug(
-            "Dispatching scene.turn_on entity=%s transition=%s", entity, transition
+
+        applied_scene: str | None = None
+        if disabled:
+            _LOGGER.debug("Disabled via %s — skipping apply", cfg.disable_flag)
+        else:
+            entity = self._resolve_scene_entity(scene_key)
+            if not entity:
+                _LOGGER.debug("No scene entity resolved for key %s", scene_key)
+            elif not self.hass.services.has_service(
+                SCENE_DOMAIN, SCENE_SERVICE_TURN_ON
+            ):
+                _LOGGER.debug("scene.turn_on not available yet — skipping dispatch")
+            else:
+                transition = getattr(cfg, transition_key)
+                _LOGGER.debug(
+                    "Dispatching scene.turn_on entity=%s transition=%s",
+                    entity,
+                    transition,
+                )
+                await self.hass.services.async_call(
+                    SCENE_DOMAIN,
+                    SCENE_SERVICE_TURN_ON,
+                    {"entity_id": entity, "transition": transition},
+                    blocking=False,
+                )
+                applied_scene = entity
+
+        self.diagnostics = DiagnosticsSnapshot(
+            motion=motion,
+            dark=self.last_dark,
+            illuminance=lux,
+            sun_elevation=elev,
+            phase=phase,
+            reason=reason,
+            override_active=override,
+            override_scene=self.override_scene,
+            override_until=self.override_until,
+            disabled=disabled,
+            applied_scene=applied_scene,
+            updated_at=now_utc,
         )
-        await self.hass.services.async_call(
-            SCENE_DOMAIN,
-            SCENE_SERVICE_TURN_ON,
-            {"entity_id": entity, "transition": transition},
-            blocking=False,
-        )
+        self._notify_listeners()
 
     def _read_sun(self) -> tuple[float, bool]:
         state = self.hass.states.get(SUN_ENTITY)

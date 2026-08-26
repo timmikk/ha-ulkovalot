@@ -406,6 +406,80 @@ async def test_disable_flag_short_circuit_logs_debug_and_skips_dispatch(
     )
 
 
+async def test_diagnostics_populated_for_normal_cycle(hass: HomeAssistant) -> None:
+    async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=30, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+    diag = coord.diagnostics
+    assert diag.motion is False
+    assert diag.illuminance == 5000.0
+    assert diag.sun_elevation == 30.0
+    assert diag.phase.value == "day"
+    assert diag.reason == "day"
+    assert diag.applied_scene == "scene.day"
+    assert diag.disabled is False
+    assert diag.override_active is False
+
+
+async def test_diagnostics_disabled_cycle_skips_dispatch(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 22:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=-10, lux="0", disable_state="on")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+    diag = coord.diagnostics
+    assert diag.disabled is True
+    assert diag.applied_scene is None
+    assert diag.reason == "disabled"
+    assert calls == []
+
+
+async def test_diagnostics_override_cycle(hass: HomeAssistant) -> None:
+    async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_OVERRIDE,
+            {"scene": "scene.party", "duration": 60},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+
+    diag = coord.diagnostics
+    assert diag.override_active is True
+    assert diag.override_scene == "scene.party"
+    assert diag.override_until == coord.override_until
+    assert diag.applied_scene == "scene.party"
+    assert diag.reason == "override"
+
+
+async def test_diagnostics_listener_notified_on_apply(hass: HomeAssistant) -> None:
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+        calls_made = []
+        remove = coord.async_add_listener(lambda: calls_made.append(1))
+        hass.states.async_set(LUX, "10")
+        await hass.async_block_till_done()
+
+    assert calls_made
+    remove()
+    assert coord._listeners == []
+
+
 async def test_unload_stops_runtime_dispatch(hass: HomeAssistant) -> None:
     calls = async_mock_service(hass, "scene", "turn_on")
 
