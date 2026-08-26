@@ -186,3 +186,51 @@ async def test_unload_removes_options_update_listener(hass: HomeAssistant) -> No
     await hass.async_block_till_done()
 
     assert entry.entry_id not in hass.data[DOMAIN]
+
+
+async def test_all_diagnostic_entities_are_registered(hass: HomeAssistant) -> None:
+    """19 diagnostics: 9 original + 6 ingredients + 4 config thresholds."""
+    await _install(hass)
+
+    prefix = "outdoor_lights_coordinator"
+    sensors = {
+        s.entity_id
+        for s in hass.states.async_all("sensor")
+        if prefix in s.entity_id
+    }
+    binaries = {
+        s.entity_id
+        for s in hass.states.async_all("binary_sensor")
+        if prefix in s.entity_id
+    }
+
+    assert sensors == {
+        f"sensor.{prefix}_{key}"
+        for key in (
+            "illuminance",
+            "sun_elevation",
+            "phase",
+            "reason",
+            "current_scene",
+            "sun_darkness",
+            "lux_darkness",
+            "darkness_source",
+            "last_evaluated",
+            "lux_on_below",
+            "lux_off_above",
+            "sun_elevation_dark_floor",
+            "sun_elevation_bright_ceiling",
+        )
+    }
+    assert binaries == {
+        f"binary_sensor.{prefix}_{key}"
+        for key in (
+            "motion",
+            "dark",
+            "override_active",
+            "disabled",
+            "night_window",
+            "sun_rising",
+        )
+    }
+    assert len(sensors) + len(binaries) == 19

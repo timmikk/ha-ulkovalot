@@ -29,6 +29,8 @@ async def async_setup_entry(
             DarkBinarySensor(coordinator, entry),
             OverrideActiveBinarySensor(coordinator, entry),
             DisabledBinarySensor(coordinator, entry),
+            NightWindowBinarySensor(coordinator, entry),
+            SunRisingBinarySensor(coordinator, entry),
         ]
     )
 
@@ -107,3 +109,39 @@ class DisabledBinarySensor(_DiagnosticBinarySensor):
     @property
     def is_on(self) -> bool:
         return self.coordinator.diagnostics.disabled
+
+
+class NightWindowBinarySensor(_DiagnosticBinarySensor):
+    """True while the clock sits inside the configured night window.
+
+    This is a **time-only** signal: it never feeds ``is_dark()`` and can
+    never make the lights come on by itself. It only splits an already-dark
+    state into night vs. morning/evening, which is why it can read ``on``
+    at the same time as ``Dark`` reads ``off``.
+    """
+
+    def __init__(self, coordinator: UlkovalotCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "night_window", "Night window")
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.diagnostics.night_window
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        config = self.coordinator.config
+        return {
+            "night_start": config.night_start.isoformat(),
+            "night_end": config.night_end.isoformat(),
+        }
+
+
+class SunRisingBinarySensor(_DiagnosticBinarySensor):
+    """True while the sun is climbing — picks morning over evening."""
+
+    def __init__(self, coordinator: UlkovalotCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "sun_rising", "Sun rising")
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.diagnostics.rising

@@ -8,8 +8,11 @@ covered separately in ``tests/test_init.py``.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
+import pytest
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -45,13 +48,26 @@ from custom_components.ulkovalot.coordinator import (
     DiagnosticsSnapshot,
     UlkovalotCoordinator,
 )
-from custom_components.ulkovalot.logic import Phase
+from custom_components.ulkovalot.logic import (
+    DarknessSource,
+    LuxDarkness,
+    Phase,
+    SunDarkness,
+)
 from custom_components.ulkovalot.sensor import (
     CurrentSceneSensor,
+    DarknessSourceSensor,
     IlluminanceSensor,
+    LastEvaluatedSensor,
+    LuxDarknessSensor,
+    LuxOffAboveSensor,
+    LuxOnBelowSensor,
     PhaseSensor,
     ReasonSensor,
+    SunDarknessSensor,
+    SunElevBrightCeilingSensor,
     SunElevationSensor,
+    SunElevDarkFloorSensor,
 )
 
 
@@ -82,8 +98,8 @@ def _payload(**overrides: Any) -> dict[str, Any]:
     return base
 
 
-def _entry() -> MockConfigEntry:
-    payload = _payload()
+def _entry(**overrides: Any) -> MockConfigEntry:
+    payload = _payload(**overrides)
     return MockConfigEntry(
         domain=DOMAIN,
         title="Outdoor lights coordinator",
@@ -219,3 +235,129 @@ def test_current_scene_sensor_exposes_scene_key_and_transition(
         "scene_key": "scene_motion",
         "transition": 1.0,
     }
+
+
+# --- new ingredient sensors ------------------------------------------------
+
+
+def test_sun_darkness_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(
+        sun_darkness=SunDarkness.AMBIGUOUS, sun_elevation=1.5
+    )
+    sensor = SunDarknessSensor(coordinator, entry)
+
+    assert sensor.native_value == "ambiguous"
+    assert sensor.unique_id == f"{entry.entry_id}-sun_darkness"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+    assert sensor.extra_state_attributes == {
+        "elevation": 1.5,
+        "dark_floor": -3.0,
+        "bright_ceiling": 6.0,
+    }
+
+
+def test_lux_darkness_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(lux_darkness=LuxDarkness.HOLD, illuminance=60.0)
+    sensor = LuxDarknessSensor(coordinator, entry)
+
+    assert sensor.native_value == "hold"
+    assert sensor.unique_id == f"{entry.entry_id}-lux_darkness"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+    assert sensor.extra_state_attributes == {
+        "illuminance": 60.0,
+        "lux_on_below": 30.0,
+        "lux_off_above": 100.0,
+    }
+
+
+def test_lux_darkness_sensor_unknown_when_no_readings(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(
+        lux_darkness=LuxDarkness.UNKNOWN, illuminance=None
+    )
+    sensor = LuxDarknessSensor(coordinator, entry)
+
+    assert sensor.native_value == "unknown"
+    assert sensor.extra_state_attributes["illuminance"] is None
+
+
+def test_darkness_source_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(
+        darkness_source=DarknessSource.LUX_HYSTERESIS_HOLD
+    )
+    sensor = DarknessSourceSensor(coordinator, entry)
+
+    assert sensor.native_value == "lux_hysteresis_hold"
+    assert sensor.unique_id == f"{entry.entry_id}-darkness_source"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+def test_last_evaluated_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    stamp = datetime(2026, 8, 26, 21, 40, tzinfo=timezone.utc)
+    coordinator.diagnostics = _snapshot(updated_at=stamp)
+    sensor = LastEvaluatedSensor(coordinator, entry)
+
+    assert sensor.native_value == stamp
+    assert sensor.device_class == SensorDeviceClass.TIMESTAMP
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+@pytest.mark.parametrize(
+    ("sensor_class", "key", "expected", "unit"),
+    [
+        (LuxOnBelowSensor, "lux_on_below", 30.0, "lx"),
+        (LuxOffAboveSensor, "lux_off_above", 100.0, "lx"),
+        (SunElevDarkFloorSensor, "sun_elev_dark_floor", -3.0, "°"),
+        (SunElevBrightCeilingSensor, "sun_elev_bright_ceiling", 6.0, "°"),
+    ],
+)
+def test_threshold_sensors_publish_configured_values(
+    hass: HomeAssistant, sensor_class, key, expected, unit
+) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = sensor_class(coordinator, entry)
+
+    assert sensor.native_value == expected
+    assert sensor.native_unit_of_measurement == unit
+    assert sensor.unique_id == f"{entry.entry_id}-{key}"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+
+
+def test_threshold_sensors_follow_a_config_change(hass: HomeAssistant) -> None:
+    """Thresholds read RuntimeConfig, so an entry reload republishes them."""
+    entry = _entry(**{CONF_LUX_ON_BELOW: 55})
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = LuxOnBelowSensor(coordinator, entry)
+
+    assert sensor.native_value == 55.0
+
+
+@pytest.mark.parametrize(
+    ("sensor_class", "value"),
+    [
+        (PhaseSensor, "phase"),
+        (SunDarknessSensor, "sun_darkness"),
+        (LuxDarknessSensor, "lux_darkness"),
+        (DarknessSourceSensor, "darkness_source"),
+        (ReasonSensor, "reason"),
+    ],
+)
+def test_enum_sensor_values_are_declared_options(
+    hass: HomeAssistant, sensor_class, value
+) -> None:
+    """HA drops a state that isn't in the sensor's own options list."""
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    sensor = sensor_class(coordinator, entry)
+
+    assert sensor.native_value in sensor.options

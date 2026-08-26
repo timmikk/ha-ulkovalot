@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+import pytest
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -20,7 +21,9 @@ from custom_components.ulkovalot.binary_sensor import (
     DarkBinarySensor,
     DisabledBinarySensor,
     MotionBinarySensor,
+    NightWindowBinarySensor,
     OverrideActiveBinarySensor,
+    SunRisingBinarySensor,
 )
 from custom_components.ulkovalot.const import (
     CONF_DISABLE_FLAG,
@@ -165,3 +168,48 @@ def test_motion_binary_sensor_exposes_no_motion_wait(hass: HomeAssistant) -> Non
     sensor = MotionBinarySensor(coordinator, entry)
 
     assert sensor.extra_state_attributes == {"no_motion_wait": 120.0}
+
+
+# --- new ingredient binary sensors -----------------------------------------
+
+
+@pytest.mark.parametrize("night_window", [True, False])
+def test_night_window_binary_sensor_reflects_diagnostics(
+    hass: HomeAssistant, night_window: bool
+) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(night_window=night_window)
+    sensor = NightWindowBinarySensor(coordinator, entry)
+
+    assert sensor.is_on is night_window
+    assert sensor.unique_id == f"{entry.entry_id}-night_window"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
+    assert sensor.extra_state_attributes == {
+        "night_start": "23:00:00",
+        "night_end": "07:00:00",
+    }
+
+
+def test_night_window_is_independent_of_dark(hass: HomeAssistant) -> None:
+    """Time only — the window can be open while it is still bright out."""
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(night_window=True, dark=False)
+
+    assert NightWindowBinarySensor(coordinator, entry).is_on is True
+    assert DarkBinarySensor(coordinator, entry).is_on is False
+
+
+@pytest.mark.parametrize("rising", [True, False])
+def test_sun_rising_binary_sensor_reflects_diagnostics(
+    hass: HomeAssistant, rising: bool
+) -> None:
+    entry = _entry()
+    coordinator = UlkovalotCoordinator(hass, entry)
+    coordinator.diagnostics = _snapshot(rising=rising)
+    sensor = SunRisingBinarySensor(coordinator, entry)
+
+    assert sensor.is_on is rising
+    assert sensor.unique_id == f"{entry.entry_id}-sun_rising"
+    assert sensor.entity_category == EntityCategory.DIAGNOSTIC
