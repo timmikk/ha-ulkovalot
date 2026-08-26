@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-26
+
+### Added
+
+- Diagnostic entities exposing the coordinator's evaluation state: four
+  `binary_sensor` entities (`motion`, `dark`, `override_active`,
+  `disabled`) and five `sensor` entities (`illuminance`, `sun_elevation`,
+  `phase`, `reason`, `current_scene`), all grouped under one device and
+  refreshed on every scene-decision cycle — including cycles that don't
+  dispatch a scene. Makes the automatic scene choice observable without
+  turning on debug logging.
+
 ## [0.9.2] - 2026-08-25
 
 ### Fixed
