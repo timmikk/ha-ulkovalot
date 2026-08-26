@@ -93,21 +93,6 @@ def _parse_time(raw: str | dtime) -> dtime:
     return dtime.fromisoformat(raw)
 
 
-def _crossed(old: float | None, new: float, threshold: float) -> bool:
-    """True when the elevation moved across ``threshold`` (either direction).
-
-    A missing ``old`` counts as a crossing so the first sun event after
-    setup always triggers re-evaluation.
-    """
-    if old is None:
-        return True
-    if old <= threshold < new:
-        return True
-    if new <= threshold < old:
-        return True
-    return False
-
-
 @dataclass(frozen=True)
 class RuntimeConfig:
     """Snapshot of ``entry.data`` + ``entry.options`` resolved to typed values."""
@@ -225,7 +210,7 @@ class UlkovalotCoordinator:
         self._unsubs: list[Callable[[], None]] = []
         self._motion_timeouts: list[Callable[[], None]] = []
         self._pending_task: asyncio.Task | None = None
-        self._last_sun_elev: float | None = None
+        self._last_applied_scene: str | None = None
         self.apply_scene: ApplyScene = _noop_apply
         self.diagnostics = DiagnosticsSnapshot(
             motion=False,
@@ -398,20 +383,13 @@ class UlkovalotCoordinator:
         if new is None:
             return
         try:
-            new_elev = float(new.attributes.get("elevation"))
+            float(new.attributes.get("elevation"))
         except (TypeError, ValueError):
             return
-        old_elev = self._last_sun_elev
-        self._last_sun_elev = new_elev
-        cfg = self.config
-        if _crossed(old_elev, new_elev, cfg.sun_elev_dark_floor) or _crossed(
-            old_elev, new_elev, cfg.sun_elev_bright_ceiling
-        ):
-            old_repr = "None" if old_elev is None else f"{old_elev:.1f}"
-            _LOGGER.debug(
-                "Sun elevation crossed threshold: %s -> %.1f", old_repr, new_elev
-            )
-            self._schedule_apply()
+        # Re-evaluate on every reading, not just threshold crossings, so the
+        # diagnostics snapshot (and the decision it's derived from) never
+        # goes stale relative to the sun's actual position.
+        self._schedule_apply()
 
     @callback
     def _on_time_trigger(self, _now: datetime) -> None:
@@ -508,14 +486,21 @@ class UlkovalotCoordinator:
         applied_scene: str | None = None
         if disabled:
             _LOGGER.debug("Disabled via %s — skipping apply", cfg.disable_flag)
+            self._last_applied_scene = None
         else:
             entity = self._resolve_scene_entity(scene_key)
             if not entity:
                 _LOGGER.debug("No scene entity resolved for key %s", scene_key)
+                self._last_applied_scene = None
             elif not self.hass.services.has_service(
                 SCENE_DOMAIN, SCENE_SERVICE_TURN_ON
             ):
                 _LOGGER.debug("scene.turn_on not available yet — skipping dispatch")
+            elif entity == self._last_applied_scene:
+                _LOGGER.debug(
+                    "Scene %s already active — skipping redundant dispatch", entity
+                )
+                applied_scene = entity
             else:
                 transition = getattr(cfg, transition_key)
                 _LOGGER.debug(
@@ -530,6 +515,7 @@ class UlkovalotCoordinator:
                     blocking=False,
                 )
                 applied_scene = entity
+                self._last_applied_scene = entity
 
         self.diagnostics = DiagnosticsSnapshot(
             motion=motion,

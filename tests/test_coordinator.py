@@ -198,6 +198,29 @@ async def test_sun_crosses_bright_ceiling_flips_to_day(
     assert calls[-1].data["entity_id"] == "scene.day"
 
 
+async def test_sun_diagnostics_stay_fresh_without_a_threshold_crossing(
+    hass: HomeAssistant,
+) -> None:
+    """A sun tick that doesn't cross a threshold must still refresh diagnostics.
+
+    Regression test: previously ``_on_sun_state`` only scheduled a
+    re-evaluation on a dark-floor/bright-ceiling crossing, so the
+    ``sun_elevation`` diagnostic (and the decision it's derived from) went
+    stale for hours whenever the sun moved without crossing a threshold.
+    """
+    async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+        assert coord.diagnostics.sun_elevation == 15
+        _mock_sun(hass, elevation=40, rising=False)
+        await hass.async_block_till_done()
+
+    assert coord.diagnostics.sun_elevation == 40
+
+
 async def test_lux_drop_during_day_flips_to_evening(
     hass: HomeAssistant,
 ) -> None:
@@ -290,18 +313,43 @@ async def test_sun_floor_lock_keeps_dark_despite_lux(
 async def test_restart_semantics_debounces_rapid_triggers(
     hass: HomeAssistant,
 ) -> None:
+    """Rapid triggers collapse into a single apply — and thus a single dispatch.
+
+    Uses a lux drop that actually flips the resolved scene (day -> evening) so
+    the assertion exercises debouncing, not the separate same-scene dispatch
+    dedup in ``_apply_scene_impl``.
+    """
+    calls = async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=3, lux="5000")
+        await _install(hass)
+        assert calls[-1].data["entity_id"] == "scene.day"
+        calls.clear()
+        hass.states.async_set(LUX, "40")
+        hass.states.async_set(LUX, "35")
+        hass.states.async_set(LUX, "29")
+        await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[-1].data["entity_id"] == "scene.evening"
+
+
+async def test_same_scene_reapply_skips_redundant_dispatch(
+    hass: HomeAssistant,
+) -> None:
+    """A re-evaluation that resolves to the same scene must not redispatch it."""
     calls = async_mock_service(hass, "scene", "turn_on")
 
     with freeze_time("2026-08-17 12:00:00") as frozen:
         _seed_environment(hass, frozen, elevation=15, lux="5000")
         await _install(hass)
+        assert calls[-1].data["entity_id"] == "scene.day"
         calls.clear()
-        hass.states.async_set(LUX, "4999")
-        hass.states.async_set(LUX, "4998")
-        hass.states.async_set(LUX, "4997")
+        _mock_sun(hass, elevation=40, rising=False)
         await hass.async_block_till_done()
 
-    assert len(calls) == 1
+    assert calls == []
 
 
 async def test_start_override_logs_info_with_resolved_scene(
