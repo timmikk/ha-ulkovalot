@@ -1,12 +1,12 @@
 # Task: Add debug/diagnostic entities exposing coordinator state
 
-**Status:** pending
+**Status:** done
 **Issue:** #10
 **Type:** feature
 **Complexity:** medium
 **Version bump:** minor
 **Created:** 2026-08-26
-**Completed:** —
+**Completed:** 2026-08-26
 
 ## Context
 
@@ -142,3 +142,14 @@ n/a — fully transparent to in-flight clients. New entities are created fresh o
 - [ ] Rollout / state invalidation reflected (n/a, documented above)
 - [ ] Tests in "Test updates" added/updated and passing
 - [ ] Reloading the integration (or restarting HA) shows 5 new `sensor.*` and 4 new `binary_sensor.*` entities grouped under one device, and their states change on the next coordinator evaluation cycle
+
+---
+
+## Actual commits
+
+- 75e8767 feat(logic): add selection_reason for debug diagnostics
+- 6823e97 feat(coordinator): track diagnostics snapshot and notify listeners
+- d62ea4f feat(entity): add shared diagnostic entity base class
+- 35b9540 feat(sensor): add diagnostic sensors for coordinator state
+- 946d3fc feat(binary_sensor): add diagnostic binary sensors for coordinator state
+- fa4634a feat(init): forward sensor and binary_sensor platforms
