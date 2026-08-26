@@ -51,13 +51,18 @@ from datetime import date, datetime, time as dtime, timedelta
 import pytest
 
 from custom_components.ulkovalot.logic import (
+    DarknessSource,
     LogicConfig,
+    LuxDarkness,
     MotionSample,
+    SunDarkness,
     aggregate_lux,
     derive_phase,
     is_dark,
+    lux_darkness,
     motion_active,
     pick_scene,
+    sun_darkness,
 )
 
 CFG = LogicConfig(
@@ -186,7 +191,7 @@ def test_parity_trace_sensor_less(day, peak, trough):
         sample_2 = sensor_2.step(now, _in_pulse(hour, MOTION_2_PULSES))
 
         lux = aggregate_lux([])  # sensor-less config
-        dark = is_dark(elevation, lux, last_dark=False, cfg=CFG)
+        dark, _ = is_dark(elevation, lux, last_dark=False, cfg=CFG)
         phase = derive_phase(now, rising, dark, CFG)
         motion = motion_active(now, [sample_1, sample_2], NO_MOTION_WAIT)
         actual = pick_scene(phase, motion, override=False)
@@ -209,3 +214,72 @@ def test_parity_trace_sensor_less(day, peak, trough):
         f"{len(mismatches)} parity mismatches for {day} "
         f"(now, elev, rising, actual, expected): {mismatches[:10]}"
     )
+
+
+# --- darkness source consistency ------------------------------------------
+#
+# `DarknessSource` exists to name the branch `is_dark` actually took. A
+# hand-maintained mapping would rot the moment the thresholds move, so
+# instead of pinning individual pairs this sweeps the input space and
+# asserts the reported source is *consistent* with the returned bool and
+# the configured thresholds. Any future edit to `is_dark` that mislabels
+# its own branch fails here.
+
+
+def _sweep_inputs():
+    floor = CFG.sun_elev_dark_floor
+    ceiling = CFG.sun_elev_bright_ceiling
+    midpoint = (CFG.lux_on_below + CFG.lux_off_above) / 2
+    elevations = [
+        floor - 5,
+        floor,
+        floor + 0.1,
+        (floor + ceiling) / 2,
+        ceiling - 0.1,
+        ceiling,
+        ceiling + 5,
+    ]
+    luxes = [None, 0, CFG.lux_on_below, midpoint, CFG.lux_off_above, 10000]
+    for elev in elevations:
+        for lux in luxes:
+            for last_dark in (True, False):
+                yield elev, lux, last_dark
+
+
+def test_darkness_source_is_consistent_with_is_dark():
+    seen: set[DarknessSource] = set()
+
+    for elev, lux, last_dark in _sweep_inputs():
+        dark, source = is_dark(elev, lux, last_dark, CFG)
+        seen.add(source)
+        context = f"elev={elev} lux={lux} last_dark={last_dark}"
+
+        if source is DarknessSource.NO_LUX_FALLBACK:
+            assert lux is None, context
+            assert dark is (elev < CFG.sun_elev_bright_ceiling), context
+            continue
+
+        # Every remaining source implies lux was usable.
+        assert lux is not None, context
+
+        if source is DarknessSource.SUN_BELOW_FLOOR:
+            assert dark is True, context
+            assert sun_darkness(elev, CFG) is SunDarkness.DARK, context
+        elif source is DarknessSource.SUN_ABOVE_CEILING:
+            assert dark is False, context
+            assert sun_darkness(elev, CFG) is SunDarkness.BRIGHT, context
+        else:
+            # Both lux sources require the sun to have deferred.
+            assert sun_darkness(elev, CFG) is SunDarkness.AMBIGUOUS, context
+            verdict = lux_darkness(lux, CFG)
+            if source is DarknessSource.LUX_HYSTERESIS_HOLD:
+                assert verdict is LuxDarkness.HOLD, context
+                assert dark is last_dark, context
+            else:
+                assert source is DarknessSource.LUX_THRESHOLD, context
+                assert verdict in (LuxDarkness.DARK, LuxDarkness.BRIGHT), context
+                assert dark is (verdict is LuxDarkness.DARK), context
+
+    # A sweep that silently stopped exercising a branch would make every
+    # assertion above vacuous for it.
+    assert seen == set(DarknessSource)
