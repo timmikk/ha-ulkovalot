@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Ten further diagnostic entities that break the scene decision into its
+  individual inputs, so a surprising scene can be traced from the UI
+  instead of from debug logs. The `reason` sensor reported only which
+  branch won (`night`), collapsing three independent facts into one
+  word; each is now its own entity. `Sun darkness` and `Lux darkness`
+  give each input's standalone verdict — including the middle states
+  (`ambiguous`, `hold`) where that input declines to decide and defers
+  to the other — `Darkness source` names which one actually decided,
+  `Night window` exposes the time-of-day check (which never makes
+  anything dark on its own; it only splits an already-dark state into
+  night vs. morning/evening), `Sun rising` exposes the morning/evening
+  discriminator, and `Last evaluated` makes a stalled decision cycle
+  visible. `Lux on below`, `Lux off above`, `Sun elevation dark floor`,
+  and `Sun elevation bright ceiling` publish the configured thresholds
+  as real sensors so they can be drawn as lines against the illuminance
+  and elevation curves on a history graph.
+- Configured thresholds as attributes on the diagnostics they gate:
+  the lux bounds on `Illuminance`, the elevation bounds on `Sun
+  elevation`, the night-window bounds on `Phase`, `no_motion_wait` on
+  `Motion`, and the resolved `scene_key` / `transition` on `Current
+  scene`.
+
+Existing entities keep their unique ids and values, so no history is
+lost.
+
+### Fixed
+
+- Options saved in the UI had no effect until Home Assistant was
+  restarted. The options flow wrote the new values correctly, but the
+  integration never registered a config-entry update listener and the
+  coordinator snapshots its runtime config once at construction, so a
+  changed lux threshold or night window sat unused. The entry now
+  reloads as soon as options are saved.
+
 ## [0.10.1] - 2026-08-26
 
 ### Fixed
