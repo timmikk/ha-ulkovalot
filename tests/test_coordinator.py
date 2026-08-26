@@ -51,6 +51,12 @@ from custom_components.ulkovalot.const import (
     DOMAIN,
     OPTION_KEYS,
 )
+from custom_components.ulkovalot.logic import (
+    DarknessSource,
+    LuxDarkness,
+    SunDarkness,
+    is_dark,
+)
 
 MOTION = "binary_sensor.pir_a"
 LUX = "sensor.lux_a"
@@ -471,6 +477,55 @@ async def test_diagnostics_populated_for_normal_cycle(hass: HomeAssistant) -> No
     assert diag.applied_scene == "scene.day"
     assert diag.disabled is False
     assert diag.override_active is False
+    # Bright midday, sensor reporting 5000 lx: both ingredients agree, the
+    # sun's ceiling lock is what actually decided.
+    assert diag.sun_darkness is SunDarkness.BRIGHT
+    assert diag.lux_darkness is LuxDarkness.BRIGHT
+    assert diag.darkness_source is DarknessSource.SUN_ABOVE_CEILING
+    assert diag.night_window is False
+    assert diag.scene_key == "scene_day"
+    assert diag.transition == 10.0
+    assert diag.updated_at is not None
+
+
+async def test_diagnostics_darkness_source_matches_is_dark(hass: HomeAssistant) -> None:
+    """The snapshot must report the branch is_dark actually took."""
+    async_mock_service(hass, "scene", "turn_on")
+
+    # Elevation 0 is inside the ambiguous band (-3 .. 6), so lux decides;
+    # 10 lx is at or under lux_on_below, so it crosses a threshold.
+    with freeze_time("2026-08-17 20:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=0, lux="10")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+    diag = coord.diagnostics
+    assert diag.sun_darkness is SunDarkness.AMBIGUOUS
+    assert diag.lux_darkness is LuxDarkness.DARK
+    assert diag.darkness_source is DarknessSource.LUX_THRESHOLD
+    assert diag.dark is True
+
+    expected_dark, expected_source = is_dark(
+        diag.sun_elevation, diag.illuminance, False, coord.config.logic
+    )
+    assert diag.dark is expected_dark
+    assert diag.darkness_source is expected_source
+
+
+async def test_diagnostics_night_window_is_time_only(hass: HomeAssistant) -> None:
+    """Night window tracks the clock, not the sun — even at a bright noon."""
+    async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 23:30:00") as frozen:
+        _seed_environment(hass, frozen, elevation=30, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+
+    diag = coord.diagnostics
+    assert diag.night_window is True
+    # Bright, so the window does not drag the phase to NIGHT.
+    assert diag.dark is False
+    assert diag.phase.value == "day"
 
 
 async def test_diagnostics_disabled_cycle_skips_dispatch(hass: HomeAssistant) -> None:

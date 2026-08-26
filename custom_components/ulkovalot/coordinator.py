@@ -59,16 +59,22 @@ from .const import (
     DEFAULT_TRANSITION_TIME_MOTION,
 )
 from .logic import (
+    DarknessSource,
     LogicConfig,
+    LuxDarkness,
     MotionSample,
     Phase,
+    SunDarkness,
     aggregate_lux,
     derive_phase,
+    in_night_window,
     is_dark,
+    lux_darkness,
     motion_active,
     override_active,
     pick_scene,
     selection_reason,
+    sun_darkness,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -193,6 +199,15 @@ class DiagnosticsSnapshot:
     disabled: bool
     applied_scene: str | None
     updated_at: datetime
+    # Individual inputs to the dark/phase decision, kept so the diagnostic
+    # entities can explain *why* a scene was chosen rather than only which.
+    sun_darkness: SunDarkness
+    lux_darkness: LuxDarkness
+    darkness_source: DarknessSource
+    night_window: bool
+    rising: bool
+    scene_key: str
+    transition: float
 
 
 class UlkovalotCoordinator:
@@ -225,6 +240,13 @@ class UlkovalotCoordinator:
             disabled=False,
             applied_scene=None,
             updated_at=dt_util.utcnow(),
+            sun_darkness=SunDarkness.BRIGHT,
+            lux_darkness=LuxDarkness.UNKNOWN,
+            darkness_source=DarknessSource.NO_LUX_FALLBACK,
+            night_window=False,
+            rising=False,
+            scene_key="scene_day",
+            transition=self.config.transition_time,
         )
         self._listeners: list[Callable[[], None]] = []
 
@@ -454,8 +476,11 @@ class UlkovalotCoordinator:
             for sid in cfg.illuminance_sensors
         ]
         lux = aggregate_lux(lux_readings)
-        self.last_dark = is_dark(elev, lux, self.last_dark, cfg.logic)
+        self.last_dark, darkness_source = is_dark(elev, lux, self.last_dark, cfg.logic)
+        sun_verdict = sun_darkness(elev, cfg.logic)
+        lux_verdict = lux_darkness(lux, cfg.logic)
         now_local = dt_util.now()
+        night_window = in_night_window(now_local, cfg.logic)
         phase = derive_phase(now_local, rising, self.last_dark, cfg.logic)
         motion_samples: list[MotionSample] = []
         for sid in cfg.motion_sensors:
@@ -470,12 +495,14 @@ class UlkovalotCoordinator:
         override = override_active(now_utc, self.override_until)
         reason = selection_reason(phase, motion, override, disabled)
         scene_key, transition_key = pick_scene(phase, motion, override)
+        transition = float(getattr(cfg, transition_key))
         _LOGGER.debug(
-            "Apply: elev=%.1f lux=%s dark=%s phase=%s motion=%s override=%s "
-            "disabled=%s -> %s",
+            "Apply: elev=%.1f lux=%s dark=%s source=%s phase=%s motion=%s "
+            "override=%s disabled=%s -> %s",
             elev,
             lux,
             self.last_dark,
+            darkness_source.value,
             phase,
             motion,
             override,
@@ -502,7 +529,6 @@ class UlkovalotCoordinator:
                 )
                 applied_scene = entity
             else:
-                transition = getattr(cfg, transition_key)
                 _LOGGER.debug(
                     "Dispatching scene.turn_on entity=%s transition=%s",
                     entity,
@@ -530,6 +556,13 @@ class UlkovalotCoordinator:
             disabled=disabled,
             applied_scene=applied_scene,
             updated_at=now_utc,
+            sun_darkness=sun_verdict,
+            lux_darkness=lux_verdict,
+            darkness_source=darkness_source,
+            night_window=night_window,
+            rising=rising,
+            scene_key=scene_key,
+            transition=transition,
         )
         self._notify_listeners()
 

@@ -14,6 +14,8 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from .conftest import make_snapshot
+
 from custom_components.ulkovalot.binary_sensor import (
     DarkBinarySensor,
     DisabledBinarySensor,
@@ -49,7 +51,6 @@ from custom_components.ulkovalot.coordinator import (
     DiagnosticsSnapshot,
     UlkovalotCoordinator,
 )
-from custom_components.ulkovalot.logic import Phase
 
 
 def _payload(**overrides: Any) -> dict[str, Any]:
@@ -90,22 +91,7 @@ def _entry() -> MockConfigEntry:
 
 
 def _snapshot(**overrides: Any) -> DiagnosticsSnapshot:
-    base = dict(
-        motion=False,
-        dark=False,
-        illuminance=5000.0,
-        sun_elevation=30.0,
-        phase=Phase.DAY,
-        reason="day",
-        override_active=False,
-        override_scene=None,
-        override_until=None,
-        disabled=False,
-        applied_scene="scene.day",
-        updated_at=datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc),
-    )
-    base.update(overrides)
-    return DiagnosticsSnapshot(**base)
+    return make_snapshot(**overrides)
 
 
 def test_motion_binary_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:

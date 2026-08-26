@@ -8,12 +8,13 @@ covered separately in ``tests/test_init.py``.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from .conftest import make_snapshot
 
 from custom_components.ulkovalot.const import (
     CONF_DISABLE_FLAG,
@@ -92,22 +93,7 @@ def _entry() -> MockConfigEntry:
 
 
 def _snapshot(**overrides: Any) -> DiagnosticsSnapshot:
-    base = dict(
-        motion=False,
-        dark=False,
-        illuminance=5000.0,
-        sun_elevation=30.0,
-        phase=Phase.DAY,
-        reason="day",
-        override_active=False,
-        override_scene=None,
-        override_until=None,
-        disabled=False,
-        applied_scene="scene.day",
-        updated_at=datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc),
-    )
-    base.update(overrides)
-    return DiagnosticsSnapshot(**base)
+    return make_snapshot(**overrides)
 
 
 def test_illuminance_sensor_reflects_diagnostics(hass: HomeAssistant) -> None:
