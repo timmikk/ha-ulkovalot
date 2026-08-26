@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -9,6 +11,8 @@ from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 from .coordinator import UlkovalotCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -30,16 +34,19 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ulkovalot from a config entry."""
+    _LOGGER.debug("Setting up entry %s", entry.entry_id)
     store = hass.data.setdefault(DOMAIN, {})
     coordinator = UlkovalotCoordinator(hass, entry)
     await coordinator.async_start()
     store[entry.entry_id] = coordinator
     _register_services(hass)
+    _LOGGER.info("ulkovalot entry %s set up", entry.entry_id)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    _LOGGER.debug("Unloading entry %s", entry.entry_id)
     store = hass.data[DOMAIN]
     coordinator: UlkovalotCoordinator = store.pop(entry.entry_id)
     coordinator.unload()
@@ -55,6 +62,11 @@ def _register_services(hass: HomeAssistant) -> None:
         return
 
     async def _handle_override(call: ServiceCall) -> None:
+        _LOGGER.info(
+            "Service override called: scene=%s duration=%s",
+            call.data.get("scene"),
+            call.data.get("duration"),
+        )
         for coordinator in hass.data[DOMAIN].values():
             coordinator.start_override(
                 scene=call.data.get("scene"),
@@ -62,6 +74,7 @@ def _register_services(hass: HomeAssistant) -> None:
             )
 
     async def _handle_cancel(call: ServiceCall) -> None:
+        _LOGGER.info("Service cancel_override called")
         for coordinator in hass.data[DOMAIN].values():
             coordinator.cancel_override()
 
