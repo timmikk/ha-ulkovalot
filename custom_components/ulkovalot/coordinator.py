@@ -228,6 +228,11 @@ class UlkovalotCoordinator:
         self.override_scene = scene if scene is not None else self._default_scene
         secs = duration if duration is not None else self._default_duration
         self.override_until = dt_util.utcnow() + timedelta(seconds=secs)
+        _LOGGER.info(
+            "Override started: scene=%s until=%s",
+            self.override_scene,
+            self.override_until,
+        )
         self._cancel_timer = async_call_later(self.hass, secs, self._on_expiry)
         self.apply_scene()
 
@@ -235,6 +240,7 @@ class UlkovalotCoordinator:
         """Explicit cancel — clears state and re-evaluates immediately."""
         self._cancel_pending_timer()
         self._clear_override_state()
+        _LOGGER.info("Override cancelled")
         self.apply_scene()
 
     # -- Lifecycle ----------------------------------------------------------
@@ -250,6 +256,7 @@ class UlkovalotCoordinator:
         trigger = self.config.override_trigger
         if not trigger:
             return
+        _LOGGER.debug("Subscribed override trigger: %s", trigger)
         self._cancel_trigger = async_track_state_change_event(
             self.hass, [trigger], self._on_trigger_event
         )
@@ -317,6 +324,9 @@ class UlkovalotCoordinator:
     def _on_watched_state(self, event: Event) -> None:
         entity_id = event.data.get("entity_id") or ""
         new = event.data.get("new_state")
+        _LOGGER.debug(
+            "Watched entity changed: %s -> %s", entity_id, new.state if new else None
+        )
         if (
             entity_id in self.config.motion_sensors
             and new is not None
@@ -346,6 +356,10 @@ class UlkovalotCoordinator:
         if _crossed(old_elev, new_elev, cfg.sun_elev_dark_floor) or _crossed(
             old_elev, new_elev, cfg.sun_elev_bright_ceiling
         ):
+            old_repr = "None" if old_elev is None else f"{old_elev:.1f}"
+            _LOGGER.debug(
+                "Sun elevation crossed threshold: %s -> %.1f", old_repr, new_elev
+            )
             self._schedule_apply()
 
     @callback
@@ -367,6 +381,7 @@ class UlkovalotCoordinator:
     @callback
     def _on_expiry(self, _now: datetime) -> None:
         self._cancel_timer = None
+        _LOGGER.info("Override expired")
         self._clear_override_state()
         self.apply_scene()
 
@@ -398,6 +413,9 @@ class UlkovalotCoordinator:
         if cfg.disable_flag:
             state = self.hass.states.get(cfg.disable_flag)
             if state is not None and state.state == "on":
+                _LOGGER.debug(
+                    "Disabled via %s — skipping apply", cfg.disable_flag
+                )
                 return
         elev, rising = self._read_sun()
         lux_readings = [
@@ -424,6 +442,16 @@ class UlkovalotCoordinator:
         motion = motion_active(now_utc, motion_samples, cfg.no_motion_wait)
         override = override_active(now_utc, self.override_until)
         scene_key, transition_key = pick_scene(phase, motion, override)
+        _LOGGER.debug(
+            "Apply: elev=%.1f lux=%s dark=%s phase=%s motion=%s override=%s -> %s",
+            elev,
+            lux,
+            self.last_dark,
+            phase,
+            motion,
+            override,
+            scene_key,
+        )
         entity = self._resolve_scene_entity(scene_key)
         if not entity:
             _LOGGER.debug("No scene entity resolved for key %s", scene_key)
@@ -432,6 +460,9 @@ class UlkovalotCoordinator:
             _LOGGER.debug("scene.turn_on not available yet — skipping dispatch")
             return
         transition = getattr(cfg, transition_key)
+        _LOGGER.debug(
+            "Dispatching scene.turn_on entity=%s transition=%s", entity, transition
+        )
         await self.hass.services.async_call(
             SCENE_DOMAIN,
             SCENE_SERVICE_TURN_ON,

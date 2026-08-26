@@ -10,8 +10,11 @@ stay consistent with ``dt_util.utcnow()``.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from typing import Any
+
+import pytest
 
 from freezegun import freeze_time
 from homeassistant.core import HomeAssistant
@@ -299,6 +302,108 @@ async def test_restart_semantics_debounces_rapid_triggers(
         await hass.async_block_till_done()
 
     assert len(calls) == 1
+
+
+async def test_start_override_logs_info_with_resolved_scene(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        entry = await _install(hass)
+        caplog.set_level(logging.INFO, logger="custom_components.ulkovalot.coordinator")
+        caplog.clear()
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_OVERRIDE,
+            {"scene": "scene.party", "duration": 60},
+            blocking=True,
+        )
+
+    assert any(
+        record.levelno == logging.INFO
+        and "Override started" in record.message
+        and "scene.party" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_cancel_override_logs_info(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        entry = await _install(hass)
+        coord = hass.data[DOMAIN][entry.entry_id]
+        coord.start_override(scene="scene.party", duration=60)
+        caplog.set_level(logging.INFO, logger="custom_components.ulkovalot.coordinator")
+        caplog.clear()
+
+        coord.cancel_override()
+
+    assert any(
+        record.levelno == logging.INFO and "Override cancelled" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_override_expiry_logs_info(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=15, lux="5000")
+        await _install(hass)
+        caplog.set_level(logging.INFO, logger="custom_components.ulkovalot.coordinator")
+
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_OVERRIDE,
+            {"scene": "scene.party", "duration": 60},
+            blocking=True,
+        )
+        caplog.clear()
+        frozen.tick(timedelta(seconds=61))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+
+    assert any(
+        record.levelno == logging.INFO and "Override expired" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_apply_scene_logs_decision_summary(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    with freeze_time("2026-08-17 12:00:00") as frozen:
+        caplog.set_level(logging.DEBUG, logger="custom_components.ulkovalot.coordinator")
+        _seed_environment(hass, frozen, elevation=30, lux="5000")
+        await _install(hass)
+
+    assert any(
+        record.levelno == logging.DEBUG
+        and "Apply:" in record.message
+        and "scene_day" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_disable_flag_short_circuit_logs_debug_and_skips_dispatch(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls = async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 22:00:00") as frozen:
+        caplog.set_level(logging.DEBUG, logger="custom_components.ulkovalot.coordinator")
+        _seed_environment(hass, frozen, elevation=-10, lux="0", disable_state="on")
+        await _install(hass)
+
+    assert calls == []
+    assert any(
+        record.levelno == logging.DEBUG
+        and "skipping apply" in record.message
+        for record in caplog.records
+    )
 
 
 async def test_unload_stops_runtime_dispatch(hass: HomeAssistant) -> None:
