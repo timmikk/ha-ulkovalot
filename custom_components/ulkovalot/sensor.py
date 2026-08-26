@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -20,7 +21,7 @@ from .entity import UlkovalotEntity
 from .logic import DarknessSource, LuxDarkness, Phase, SunDarkness
 
 
-def _options(enum: type) -> list[str]:
+def _options(enum: type[Enum]) -> list[str]:
     """Option list for an ENUM sensor, derived from the enum itself.
 
     Hand-typing these lets them drift from the values the coordinator
