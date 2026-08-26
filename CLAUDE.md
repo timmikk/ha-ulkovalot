@@ -12,8 +12,10 @@ Domain: `ulkovalot`.
   - `const.py` — domain constants
   - `coordinator.py` — `DataUpdateCoordinator`, override state machine, scene-decision cycle
   - `logic.py` — pure decision logic (lux/time → scene), kept separate from HA glue for testability
+  - `entity.py` — `UlkovalotEntity` base: device info + coordinator-listener wiring
+  - `sensor.py` / `binary_sensor.py` — diagnostic entity platforms reading `coordinator.diagnostics`
   - `manifest.json`, `services.yaml` — HA integration metadata / service schema
-- `tests/` — pytest suite, one `test_*.py` per source module plus `test_parity.py` (cross-checks logic vs. coordinator) and `test_lux_focus.py`; `conftest.py` holds shared fixtures
+- `tests/` — pytest suite, one `test_*.py` per source module plus `test_parity.py` (cross-checks logic vs. the `Ulkovalot 3` blueprint), `test_lux_focus.py`, and `test_override.py`; `conftest.py` holds shared fixtures
 - `tasks/` — plan files for `/plan` and `/execute-task` (generic fallback flow — see below); completed plans move to `tasks/done/`
 - `.forgejo/workflows/ci.yml` — CI: `hassfest` (HA manifest validation against a matching core checkout), `hacs` (HACS integration validation against the GitHub mirror), `pytest` (with coverage), `sonar` (SonarQube analysis, push-to-main only)
 - `.forgejo/workflows/release.yml` — release automation
@@ -41,7 +43,7 @@ With coverage (matches CI):
   --cov-report=xml --cov-report=term-missing
 ```
 
-This is the whole suite (90 tests, ~4s) — for this project's size, just run it all rather than filtering by package.
+This is the whole suite (133 tests, ~5s) — for this project's size, just run it all rather than filtering by package.
 
 ## CI / quality gates
 
