@@ -41,8 +41,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass)
+    # RuntimeConfig is snapshotted once per coordinator, so options saved in
+    # the UI only take effect on reload — without this listener they'd sit
+    # unused until Home Assistant restarted.
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     _LOGGER.info("ulkovalot entry %s set up", entry.entry_id)
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry so the coordinator picks up the new options."""
+    _LOGGER.debug("Options updated for entry %s — reloading", entry.entry_id)
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -150,3 +150,39 @@ async def test_cancel_override_service_logs_info(
         and "Service cancel_override called" in record.message
         for record in caplog.records
     )
+
+
+async def test_options_update_reloads_entry(hass: HomeAssistant) -> None:
+    """Saving options must reach the running coordinator.
+
+    ``RuntimeConfig`` is snapshotted once in ``UlkovalotCoordinator.__init__``,
+    so without the update listener new thresholds sat unused until Home
+    Assistant restarted.
+    """
+    entry = await _install(hass)
+    coordinator = hass.data[DOMAIN][entry.entry_id]
+    assert coordinator.config.lux_on_below == 30
+
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, CONF_LUX_ON_BELOW: 55}
+    )
+    await hass.async_block_till_done()
+
+    reloaded = hass.data[DOMAIN][entry.entry_id]
+    assert reloaded.config.lux_on_below == 55
+
+
+async def test_unload_removes_options_update_listener(hass: HomeAssistant) -> None:
+    """The listener is registered via async_on_unload, so unload drops it."""
+    entry = await _install(hass)
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Updating options on an unloaded entry must not resurrect the coordinator.
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, CONF_LUX_ON_BELOW: 77}
+    )
+    await hass.async_block_till_done()
+
+    assert entry.entry_id not in hass.data[DOMAIN]
