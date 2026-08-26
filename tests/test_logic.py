@@ -16,6 +16,7 @@ from custom_components.ulkovalot.logic import (
     motion_active,
     override_active,
     pick_scene,
+    selection_reason,
 )
 
 
@@ -172,3 +173,54 @@ def test_override_active(until, expected):
 )
 def test_pick_scene(phase, motion, override, expected):
     assert pick_scene(phase, motion, override) == expected
+
+
+# --- selection_reason ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("phase", "motion", "override", "disabled", "expected"),
+    [
+        # disabled beats everything, including override.
+        (Phase.DAY, True, True, True, "disabled"),
+        # override beats phase.
+        (Phase.DAY, False, True, False, "override"),
+        (Phase.NIGHT, False, True, False, "override"),
+        # day.
+        (Phase.DAY, False, False, False, "day"),
+        # morning wins over motion.
+        (Phase.MORNING, True, False, False, "morning"),
+        # motion during evening/night.
+        (Phase.EVENING, True, False, False, "motion"),
+        (Phase.NIGHT, True, False, False, "motion"),
+        # evening / night without motion.
+        (Phase.EVENING, False, False, False, "evening"),
+        (Phase.NIGHT, False, False, False, "night"),
+    ],
+)
+def test_selection_reason(phase, motion, override, disabled, expected):
+    assert selection_reason(phase, motion, override, disabled) == expected
+
+
+@pytest.mark.parametrize(
+    ("phase", "motion", "override"),
+    [
+        (Phase.DAY, False, False),
+        (Phase.MORNING, True, False),
+        (Phase.EVENING, True, False),
+        (Phase.NIGHT, True, False),
+        (Phase.EVENING, False, False),
+        (Phase.NIGHT, False, False),
+        (Phase.DAY, False, True),
+    ],
+)
+def test_selection_reason_parity_with_pick_scene(phase, motion, override):
+    """When not disabled, the reason should match the branch pick_scene took."""
+    scene_key, _ = pick_scene(phase, motion, override)
+    reason = selection_reason(phase, motion, override, disabled=False)
+    if override:
+        assert scene_key == "override_scene" and reason == "override"
+    elif motion and phase not in (Phase.DAY, Phase.MORNING):
+        assert scene_key == "scene_motion" and reason == "motion"
+    else:
+        assert scene_key == f"scene_{reason}"

@@ -126,6 +126,25 @@ def override_active(now: datetime, override_until: datetime | None) -> bool:
     return now < override_until
 
 
+def selection_reason(phase: Phase, motion: bool, override: bool, disabled: bool) -> str:
+    """Mirror ``pick_scene``'s branch order, with the extra ``disabled`` pre-check."""
+    if disabled:
+        return "disabled"
+    if override:
+        return "override"
+    if phase == Phase.DAY:
+        return "day"
+    if phase == Phase.MORNING:
+        return "morning"
+    if motion:
+        return "motion"
+    if phase == Phase.EVENING:
+        return "evening"
+    if phase == Phase.NIGHT:
+        return "night"
+    return "motion"
+
+
 def pick_scene(
     phase: Phase,
     motion: bool,
