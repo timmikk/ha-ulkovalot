@@ -199,6 +199,23 @@ asserts the reported source is consistent with the returned bool and the thresho
 - [ ] Assert: `source == LUX_HYSTERESIS_HOLD` implies `last_dark is True` and `dark is True`
 - [ ] Update the existing trace-comparison helpers for the new `is_dark` tuple return
 
+### 8. Changelog entry
+**Files:** `CHANGELOG.md`
+
+`.forgejo/workflows/release.yml` builds the GitHub Release body by awk-extracting this version's
+section out of `CHANGELOG.md` (falling back to a bare `Release <tag>` line if the section is
+empty). An entry under `[Unreleased]` is therefore the only thing that produces real release
+notes — without it the release for this change ships with no description.
+
+- [ ] Add an `### Added` entry under `[Unreleased]` covering the ten new diagnostic entities
+      (six ingredients + four thresholds) and the threshold attributes on the existing nine.
+      Match the prose style of the `0.10.0` entry: what became observable and why it matters,
+      not a bare entity list
+- [ ] Add a `### Fixed` entry under `[Unreleased]` for the options-reload bug from work item 3 —
+      saving options in the UI previously had no effect until Home Assistant restarted. This is
+      the user-visible behaviour change and must not be buried in the Added entry
+- [ ] Leave the version heading alone — release tooling promotes `[Unreleased]` at bump time
+
 ---
 
 ## Rollout / state invalidation
@@ -255,7 +272,8 @@ Two operator-visible notes, both listed under "Definition of done":
 | 4 | init | `__init__.py`, `tests/test_init.py` | `fix(init): reload entry when options change` |
 | 5 | sensor | `sensor.py`, `binary_sensor.py`, `tests/test_sensor.py`, `tests/test_binary_sensor.py` | `feat(sensor): add threshold attributes to existing diagnostics` |
 | 6 | sensor | `sensor.py`, `binary_sensor.py`, `tests/test_sensor.py`, `tests/test_binary_sensor.py` | `feat(sensor): add ingredient and threshold diagnostic entities` |
-| 7 | wrap-up | rename to `tasks/done/11-feature-expand-diagnostic-entities-with-decision-ingredients-done.md`, set `Status: done` and `Completed: <date>` | `chore: mark expand-diagnostic-entities plan as done` |
+| 7 | docs | `CHANGELOG.md` | `docs(changelog): record diagnostic ingredients and options reload` |
+| 8 | wrap-up | rename to `tasks/done/11-feature-expand-diagnostic-entities-with-decision-ingredients-done.md`, set `Status: done` and `Completed: <date>` | `chore: mark expand-diagnostic-entities plan as done` |
 
 ---
 
@@ -272,3 +290,5 @@ Two operator-visible notes, both listed under "Definition of done":
 - [ ] Every ENUM sensor's options list is derived from its `logic.py` enum, not hand-typed
 - [ ] Saving options in the UI reloads the entry and the threshold sensors show the new values
       without an HA restart
+- [ ] `CHANGELOG.md` `[Unreleased]` carries both an `### Added` and a `### Fixed` entry, so the
+      release built from this section has real notes rather than the `Release <tag>` fallback
