@@ -471,13 +471,15 @@ async def test_diagnostics_listener_notified_on_apply(hass: HomeAssistant) -> No
         coord = hass.data[DOMAIN][entry.entry_id]
 
         calls_made = []
-        remove = coord.async_add_listener(lambda: calls_made.append(1))
+        listener = lambda: calls_made.append(1)  # noqa: E731
+        remove = coord.async_add_listener(listener)
         hass.states.async_set(LUX, "10")
         await hass.async_block_till_done()
 
     assert calls_made
+    assert listener in coord._listeners
     remove()
-    assert coord._listeners == []
+    assert listener not in coord._listeners
 
 
 async def test_unload_stops_runtime_dispatch(hass: HomeAssistant) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "ulkovalot"
 
-PLATFORMS: list[str] = []
+PLATFORMS: list[str] = ["sensor", "binary_sensor"]
 
 # --- Config keys -----------------------------------------------------------
 # entry.data (immutable identity — sensors, scenes, trigger targets)

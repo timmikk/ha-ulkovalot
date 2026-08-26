@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, PLATFORMS
 from .coordinator import UlkovalotCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = UlkovalotCoordinator(hass, entry)
     await coordinator.async_start()
     store[entry.entry_id] = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass)
     _LOGGER.info("ulkovalot entry %s set up", entry.entry_id)
     return True
@@ -47,13 +48,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading entry %s", entry.entry_id)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
     store = hass.data[DOMAIN]
     coordinator: UlkovalotCoordinator = store.pop(entry.entry_id)
     coordinator.unload()
     if not store:
         hass.services.async_remove(DOMAIN, SERVICE_OVERRIDE)
         hass.services.async_remove(DOMAIN, SERVICE_CANCEL_OVERRIDE)
-    return True
+    return unload_ok
 
 
 def _register_services(hass: HomeAssistant) -> None:

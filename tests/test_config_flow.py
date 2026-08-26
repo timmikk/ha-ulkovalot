@@ -158,6 +158,7 @@ async def test_reconfigure_swaps_sensor_list(hass: HomeAssistant) -> None:
     )
     assert result["type"] == data_entry_flow.FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
 
     assert entry.data[CONF_MOTION_SENSORS] == ["binary_sensor.pir_c"]
     assert entry.data[CONF_ILLUMINANCE_SENSORS] == ["sensor.lux_x", "sensor.lux_y"]

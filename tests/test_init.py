@@ -110,6 +110,27 @@ async def test_override_service_logs_info(
     )
 
 
+async def test_setup_entry_forwards_platforms_and_unload_removes_entities(
+    hass: HomeAssistant,
+) -> None:
+    entry = await _install(hass)
+
+    assert hass.states.get("sensor.outdoor_lights_coordinator_illuminance") is not None
+    assert hass.states.get("binary_sensor.outdoor_lights_coordinator_motion") is not None
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert (
+        hass.states.get("sensor.outdoor_lights_coordinator_illuminance").state
+        == "unavailable"
+    )
+    assert (
+        hass.states.get("binary_sensor.outdoor_lights_coordinator_motion").state
+        == "unavailable"
+    )
+
+
 async def test_cancel_override_service_logs_info(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
