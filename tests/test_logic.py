@@ -7,16 +7,22 @@ from datetime import datetime, time as dtime, timedelta
 import pytest
 
 from custom_components.ulkovalot.logic import (
+    DarknessSource,
     LogicConfig,
+    LuxDarkness,
     MotionSample,
     Phase,
+    SunDarkness,
     aggregate_lux,
     derive_phase,
+    in_night_window,
     is_dark,
+    lux_darkness,
     motion_active,
     override_active,
     pick_scene,
     selection_reason,
+    sun_darkness,
 )
 
 
@@ -55,28 +61,90 @@ def test_aggregate_lux(readings, expected):
 
 
 @pytest.mark.parametrize(
-    ("elev", "lux", "last_dark", "expected"),
+    ("elev", "lux", "last_dark", "expected", "source"),
     [
         # Floor lock — dark regardless of high lux.
-        (-3, 500, False, True),
-        (-10, 5000, False, True),
+        (-3, 500, False, True, DarknessSource.SUN_BELOW_FLOOR),
+        (-10, 5000, False, True, DarknessSource.SUN_BELOW_FLOOR),
         # Ceiling lock — bright regardless of low lux.
-        (6, 0, True, False),
-        (20, 5, True, False),
+        (6, 0, True, False, DarknessSource.SUN_ABOVE_CEILING),
+        (20, 5, True, False, DarknessSource.SUN_ABOVE_CEILING),
         # Hysteresis band: was-bright flips dark only at/under lux_on_below.
-        (0, 30, False, True),
-        (0, 31, False, False),
+        (0, 30, False, True, DarknessSource.LUX_THRESHOLD),
+        (0, 31, False, False, DarknessSource.LUX_HYSTERESIS_HOLD),
         # Was-dark stays dark until lux crosses lux_off_above.
-        (0, 99, True, True),
-        (0, 100, True, False),
+        (0, 99, True, True, DarknessSource.LUX_HYSTERESIS_HOLD),
+        (0, 100, True, False, DarknessSource.LUX_THRESHOLD),
         # Fallback when lux is None: single ceiling threshold.
-        (5, None, False, True),
-        (6, None, False, False),
-        (-10, None, True, True),
+        (5, None, False, True, DarknessSource.NO_LUX_FALLBACK),
+        (6, None, False, False, DarknessSource.NO_LUX_FALLBACK),
+        (-10, None, True, True, DarknessSource.NO_LUX_FALLBACK),
     ],
 )
-def test_is_dark(elev, lux, last_dark, expected):
-    assert is_dark(elev, lux, last_dark, CFG) is expected
+def test_is_dark(elev, lux, last_dark, expected, source):
+    dark, reported = is_dark(elev, lux, last_dark, CFG)
+    assert dark is expected
+    assert reported is source
+
+
+@pytest.mark.parametrize("last_dark", [True, False])
+def test_is_dark_hysteresis_hold_retains_previous_state(last_dark):
+    """Inside the band, lux declines to decide — in *both* directions."""
+    dark, source = is_dark(0, 50, last_dark, CFG)
+    assert source is DarknessSource.LUX_HYSTERESIS_HOLD
+    assert dark is last_dark
+
+
+# --- sun_darkness / lux_darkness -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("elev", "expected"),
+    [
+        (-10, SunDarkness.DARK),
+        (-3, SunDarkness.DARK),  # floor is inclusive
+        (-2.9, SunDarkness.AMBIGUOUS),
+        (0, SunDarkness.AMBIGUOUS),
+        (5.9, SunDarkness.AMBIGUOUS),
+        (6, SunDarkness.BRIGHT),  # ceiling is inclusive
+        (20, SunDarkness.BRIGHT),
+    ],
+)
+def test_sun_darkness(elev, expected):
+    assert sun_darkness(elev, CFG) is expected
+
+
+@pytest.mark.parametrize(
+    ("lux", "expected"),
+    [
+        (None, LuxDarkness.UNKNOWN),
+        (0, LuxDarkness.DARK),
+        (30, LuxDarkness.DARK),  # lux_on_below is inclusive
+        (31, LuxDarkness.HOLD),
+        (99, LuxDarkness.HOLD),
+        (100, LuxDarkness.BRIGHT),  # lux_off_above is inclusive
+        (5000, LuxDarkness.BRIGHT),
+    ],
+)
+def test_lux_darkness(lux, expected):
+    assert lux_darkness(lux, CFG) is expected
+
+
+@pytest.mark.parametrize("last_dark", [True, False])
+@pytest.mark.parametrize("lux", [0, 30, 31, 50, 99, 100, 5000])
+def test_lux_darkness_agrees_with_is_dark_in_the_band(lux, last_dark):
+    """The standalone lux verdict must not drift from is_dark's lux branch.
+
+    Only meaningful at an ambiguous elevation, where the sun defers.
+    """
+    dark, source = is_dark(0, lux, last_dark, CFG)
+    verdict = lux_darkness(lux, CFG)
+    if verdict is LuxDarkness.HOLD:
+        assert source is DarknessSource.LUX_HYSTERESIS_HOLD
+        assert dark is last_dark
+    else:
+        assert source is DarknessSource.LUX_THRESHOLD
+        assert dark is (verdict is LuxDarkness.DARK)
 
 
 # --- derive_phase --------------------------------------------------------
@@ -105,6 +173,31 @@ def _at(h: int, m: int = 0) -> datetime:
 )
 def test_derive_phase(now, rising, dark, expected):
     assert derive_phase(now, rising, dark, CFG) is expected
+
+
+@pytest.mark.parametrize(
+    ("now", "expected"),
+    [
+        # The window wraps midnight: 23:00 inclusive -> 07:00 exclusive.
+        (_at(23, 0), True),
+        (_at(23, 30), True),
+        (_at(0, 0), True),
+        (_at(6, 59), True),
+        (_at(7, 0), False),
+        (_at(12, 0), False),
+        (_at(22, 59), False),
+    ],
+)
+def test_in_night_window(now, expected):
+    assert in_night_window(now, CFG) is expected
+
+
+@pytest.mark.parametrize("hour", range(24))
+def test_derive_phase_agrees_with_in_night_window(hour):
+    """NIGHT is reported exactly when the window says so, given dark."""
+    now = _at(hour)
+    phase = derive_phase(now, rising=False, dark=True, cfg=CFG)
+    assert (phase is Phase.NIGHT) is in_night_window(now, CFG)
 
 
 # --- motion_active -------------------------------------------------------

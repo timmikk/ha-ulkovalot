@@ -23,6 +23,42 @@ class Phase(str, Enum):
     NIGHT = "night"
 
 
+class SunDarkness(str, Enum):
+    """Sun elevation's standalone verdict, ignoring lux entirely.
+
+    ``AMBIGUOUS`` is the band between the two configured elevations, where
+    the sun declines to decide and defers to lux.
+    """
+
+    DARK = "dark"
+    AMBIGUOUS = "ambiguous"
+    BRIGHT = "bright"
+
+
+class LuxDarkness(str, Enum):
+    """Lux's standalone verdict, ignoring sun elevation entirely.
+
+    ``HOLD`` is the hysteresis band between ``lux_on_below`` and
+    ``lux_off_above``, where lux declines to decide and the previous
+    dark state is retained.
+    """
+
+    DARK = "dark"
+    HOLD = "hold"
+    BRIGHT = "bright"
+    UNKNOWN = "unknown"
+
+
+class DarknessSource(str, Enum):
+    """Which input actually decided the combined dark/bright answer."""
+
+    SUN_BELOW_FLOOR = "sun_below_floor"
+    SUN_ABOVE_CEILING = "sun_above_ceiling"
+    LUX_THRESHOLD = "lux_threshold"
+    LUX_HYSTERESIS_HOLD = "lux_hysteresis_hold"
+    NO_LUX_FALLBACK = "no_lux_fallback"
+
+
 @dataclass(frozen=True)
 class LogicConfig:
     """Snapshot of options used by the pure functions."""
@@ -74,22 +110,59 @@ def aggregate_lux(readings: Iterable[float | int | str | None]) -> float | None:
     return float(median(valid))
 
 
+def sun_darkness(elev: float, cfg: LogicConfig) -> SunDarkness:
+    """Sun elevation's verdict on its own, before lux is consulted."""
+    if elev <= cfg.sun_elev_dark_floor:
+        return SunDarkness.DARK
+    if elev >= cfg.sun_elev_bright_ceiling:
+        return SunDarkness.BRIGHT
+    return SunDarkness.AMBIGUOUS
+
+
+def lux_darkness(lux: float | None, cfg: LogicConfig) -> LuxDarkness:
+    """Lux's verdict on its own, independent of sun elevation."""
+    if lux is None:
+        return LuxDarkness.UNKNOWN
+    if lux <= cfg.lux_on_below:
+        return LuxDarkness.DARK
+    if lux >= cfg.lux_off_above:
+        return LuxDarkness.BRIGHT
+    return LuxDarkness.HOLD
+
+
 def is_dark(
     elev: float,
     lux: float | None,
     last_dark: bool,
     cfg: LogicConfig,
-) -> bool:
-    """Combined lux + sun-elevation dark/bright decision with hysteresis."""
+) -> tuple[bool, DarknessSource]:
+    """Combined lux + sun-elevation dark/bright decision with hysteresis.
+
+    Returns the decision along with the input that produced it, so the
+    diagnostic entities can name *why* the lights went the way they did
+    rather than only reporting the outcome.
+    """
     if lux is None:
-        return elev < cfg.sun_elev_bright_ceiling
-    if elev <= cfg.sun_elev_dark_floor:
-        return True
-    if elev >= cfg.sun_elev_bright_ceiling:
-        return False
-    if last_dark:
-        return lux < cfg.lux_off_above
-    return lux <= cfg.lux_on_below
+        return elev < cfg.sun_elev_bright_ceiling, DarknessSource.NO_LUX_FALLBACK
+    sun = sun_darkness(elev, cfg)
+    if sun is SunDarkness.DARK:
+        return True, DarknessSource.SUN_BELOW_FLOOR
+    if sun is SunDarkness.BRIGHT:
+        return False, DarknessSource.SUN_ABOVE_CEILING
+    verdict = lux_darkness(lux, cfg)
+    if verdict is LuxDarkness.HOLD:
+        return last_dark, DarknessSource.LUX_HYSTERESIS_HOLD
+    return verdict is LuxDarkness.DARK, DarknessSource.LUX_THRESHOLD
+
+
+def in_night_window(now: datetime, cfg: LogicConfig) -> bool:
+    """True while the clock sits inside the configured night window.
+
+    Purely a time check — it never makes anything dark on its own; it only
+    splits an already-dark state into night vs. morning/evening.
+    """
+    t = now.time()
+    return t >= cfg.night_start or t < cfg.night_end
 
 
 def derive_phase(
@@ -101,8 +174,7 @@ def derive_phase(
     """Map (time, sun direction, dark) to a coarse phase."""
     if not dark:
         return Phase.DAY
-    t = now.time()
-    if t >= cfg.night_start or t < cfg.night_end:
+    if in_night_window(now, cfg):
         return Phase.NIGHT
     if rising:
         return Phase.MORNING
