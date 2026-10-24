@@ -117,8 +117,8 @@ Choose priority (first match wins)
 1. `override_active` → `override_scene` (transition) — overrides
    everything, including day/night phases
 2. `is_day_time` → `scene_day` (transition)
-3. `is_morning` → `scene_morning` (transition)
-4. `not is_day_time and is_motion` → `scene_motion` (transition_motion)
+3. `not is_day_time and is_motion` → `scene_motion` (transition_motion)
+4. `is_morning` → `scene_morning` (transition)
 5. `is_evening` → `scene_evening` (transition)
 6. `is_night` → `scene_night` (transition)
 7. default → `scene_motion` (transition)

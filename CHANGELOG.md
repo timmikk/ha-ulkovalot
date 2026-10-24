@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Motion detected during the morning scene now correctly switches to the bright
+  motion scene (`scene_motion`). Previously, the morning scene check preceded
+  motion in the choose priority, causing morning motion to be ignored while
+  evening and night motion worked as expected.
+
 ## [0.11.0] - 2026-08-26
 
 ### Added
