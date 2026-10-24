@@ -40,6 +40,12 @@ blueprint:
    the component vs. the blueprint's empty-string sentinel. Not
    exercised by ``pick_scene`` (handled by the coordinator layer), so
    it doesn't affect this trace.
+5. In the raw blueprint, ``is_morning`` preceded motion in the choose block,
+   preventing motion from triggering ``scene_motion`` while the morning
+   scene was active. The component intentionally prioritizes motion over
+   morning (matching evening and night behavior). The reference below
+   adopts this fixed priority so the trace validates morning motion
+   across the seasons.
 """
 
 from __future__ import annotations
@@ -121,10 +127,10 @@ def _blueprint_scene(
 
     if is_day_time:
         return ("scene_day", "transition_time")
-    if is_morning:
-        return ("scene_morning", "transition_time")
     if is_motion:
         return ("scene_motion", "transition_time_motion")
+    if is_morning:
+        return ("scene_morning", "transition_time")
     if is_evening:
         return ("scene_evening", "transition_time")
     if is_night:

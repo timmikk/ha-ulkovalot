@@ -252,12 +252,12 @@ def test_override_active(until, expected):
         (Phase.NIGHT, False, True, ("override_scene", "transition_time")),
         # 2. day.
         (Phase.DAY, False, False, ("scene_day", "transition_time")),
-        # 3. morning wins over motion.
-        (Phase.MORNING, True, False, ("scene_morning", "transition_time")),
-        # 4. non-day + motion → scene_motion (fast transition).
+        # 3. non-day + motion → scene_motion (fast transition).
+        (Phase.MORNING, True, False, ("scene_motion", "transition_time_motion")),
         (Phase.EVENING, True, False, ("scene_motion", "transition_time_motion")),
         (Phase.NIGHT, True, False, ("scene_motion", "transition_time_motion")),
-        # 5, 6. evening / night without motion.
+        # 4, 5, 6. morning / evening / night without motion.
+        (Phase.MORNING, False, False, ("scene_morning", "transition_time")),
         (Phase.EVENING, False, False, ("scene_evening", "transition_time")),
         (Phase.NIGHT, False, False, ("scene_night", "transition_time")),
         # 7. default fallback for out-of-band phase.
@@ -281,12 +281,12 @@ def test_pick_scene(phase, motion, override, expected):
         (Phase.NIGHT, False, True, False, "override"),
         # day.
         (Phase.DAY, False, False, False, "day"),
-        # morning wins over motion.
-        (Phase.MORNING, True, False, False, "morning"),
-        # motion during evening/night.
+        # motion during morning/evening/night.
+        (Phase.MORNING, True, False, False, "motion"),
         (Phase.EVENING, True, False, False, "motion"),
         (Phase.NIGHT, True, False, False, "motion"),
-        # evening / night without motion.
+        # morning / evening / night without motion.
+        (Phase.MORNING, False, False, False, "morning"),
         (Phase.EVENING, False, False, False, "evening"),
         (Phase.NIGHT, False, False, False, "night"),
     ],
@@ -300,6 +300,7 @@ def test_selection_reason(phase, motion, override, disabled, expected):
     [
         (Phase.DAY, False, False),
         (Phase.MORNING, True, False),
+        (Phase.MORNING, False, False),
         (Phase.EVENING, True, False),
         (Phase.NIGHT, True, False),
         (Phase.EVENING, False, False),
@@ -313,7 +314,7 @@ def test_selection_reason_parity_with_pick_scene(phase, motion, override):
     reason = selection_reason(phase, motion, override, disabled=False)
     if override:
         assert scene_key == "override_scene" and reason == "override"
-    elif motion and phase not in (Phase.DAY, Phase.MORNING):
+    elif motion and phase != Phase.DAY:
         assert scene_key == "scene_motion" and reason == "motion"
     else:
         assert scene_key == f"scene_{reason}"

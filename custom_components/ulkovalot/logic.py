@@ -211,10 +211,10 @@ def selection_reason(phase: Phase, motion: bool, override: bool, disabled: bool)
         return "override"
     if phase == Phase.DAY:
         return "day"
-    if phase == Phase.MORNING:
-        return "morning"
     if motion:
         return "motion"
+    if phase == Phase.MORNING:
+        return "morning"
     if phase == Phase.EVENING:
         return "evening"
     if phase == Phase.NIGHT:
@@ -237,10 +237,10 @@ def pick_scene(
         return ("override_scene", "transition_time")
     if phase == Phase.DAY:
         return ("scene_day", "transition_time")
-    if phase == Phase.MORNING:
-        return ("scene_morning", "transition_time")
     if motion:
         return ("scene_motion", "transition_time_motion")
+    if phase == Phase.MORNING:
+        return ("scene_morning", "transition_time")
     if phase == Phase.EVENING:
         return ("scene_evening", "transition_time")
     if phase == Phase.NIGHT:
