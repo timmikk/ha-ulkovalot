@@ -188,6 +188,45 @@ async def test_motion_timeout_refires_underlying_scene(
     assert calls[-1].data == {"entity_id": "scene.evening", "transition": 10.0}
 
 
+async def test_motion_pulse_in_morning_fires_scene_motion(
+    hass: HomeAssistant,
+) -> None:
+    calls = async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 08:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=0, rising=True, lux="10")
+        await _install(hass)
+        assert calls[-1].data["entity_id"] == "scene.morning"
+        calls.clear()
+        hass.states.async_set(MOTION, "on")
+        await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0].data == {"entity_id": "scene.motion", "transition": 1.0}
+
+
+async def test_motion_timeout_in_morning_refires_scene_morning(
+    hass: HomeAssistant,
+) -> None:
+    calls = async_mock_service(hass, "scene", "turn_on")
+
+    with freeze_time("2026-08-17 08:00:00") as frozen:
+        _seed_environment(hass, frozen, elevation=0, rising=True, lux="10")
+        await _install(hass)
+        hass.states.async_set(MOTION, "on")
+        await hass.async_block_till_done()
+        assert calls[-1].data["entity_id"] == "scene.motion"
+        hass.states.async_set(MOTION, "off")
+        await hass.async_block_till_done()
+        calls.clear()
+        frozen.tick(timedelta(seconds=121))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+
+    assert calls, "expected motion-timeout re-fire"
+    assert calls[-1].data == {"entity_id": "scene.morning", "transition": 10.0}
+
+
 async def test_sun_crosses_bright_ceiling_flips_to_day(
     hass: HomeAssistant,
 ) -> None:
